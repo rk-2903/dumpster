@@ -13,8 +13,7 @@
         <h1>Dumpster</h1>
       </div>
       <div class="header-actions">
-        <button id="export-csv" class="btn">Export CSV</button>
-        <button id="export-json" class="btn">Export JSON</button>
+        <button id="export-open" class="btn">Export</button>
       </div>
     </header>
 
@@ -55,6 +54,34 @@
         </div>
       </div>
     </main>
+
+    <div id="export-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="export-title">
+        <h3 id="export-title">Export</h3>
+
+        <div class="modal-section">
+          <span class="modal-label">Format</span>
+          <div class="segmented" id="export-format">
+            <button type="button" class="seg active" data-format="xlsx">Excel (.xlsx)</button>
+            <button type="button" class="seg" data-format="json">JSON</button>
+          </div>
+          <p class="modal-hint" id="format-hint">One sheet per bucket.</p>
+        </div>
+
+        <div class="modal-section">
+          <span class="modal-label">Buckets</span>
+          <label class="check check-all">
+            <input type="checkbox" id="export-all" /> <span>All buckets</span>
+          </label>
+          <div id="export-buckets" class="check-list"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="export-cancel" class="btn subtle">Cancel</button>
+          <button type="button" id="export-go" class="btn primary">Export</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="dumpster.js"></script>
   </body>

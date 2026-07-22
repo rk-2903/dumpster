@@ -26,9 +26,16 @@ const els = {
   empty: document.getElementById("empty"),
   rename: document.getElementById("rename-bucket"),
   del: document.getElementById("delete-bucket"),
-  exportCsv: document.getElementById("export-csv"),
-  exportJson: document.getElementById("export-json"),
   search: document.getElementById("search"),
+  // Export modal
+  exportOpen: document.getElementById("export-open"),
+  exportModal: document.getElementById("export-modal"),
+  exportFormat: document.getElementById("export-format"),
+  formatHint: document.getElementById("format-hint"),
+  exportAll: document.getElementById("export-all"),
+  exportBuckets: document.getElementById("export-buckets"),
+  exportCancel: document.getElementById("export-cancel"),
+  exportGo: document.getElementById("export-go"),
 };
 
 let activeBucketId = null;
@@ -43,9 +50,8 @@ async function init() {
 
   els.rename.addEventListener("click", onRename);
   els.del.addEventListener("click", onDelete);
-  els.exportCsv.addEventListener("click", () => exportActive("csv"));
-  els.exportJson.addEventListener("click", () => exportActive("json"));
   els.search.addEventListener("input", applyFilter);
+  wireExportModal();
 
   // A dump made from the context menu while this tab is open should show up.
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -354,30 +360,131 @@ async function onDelete() {
   await renderBucket();
 }
 
-async function exportActive(format) {
-  const buckets = await getBuckets();
-  const bucket = buckets.find((b) => b.id === activeBucketId);
-  if (!bucket) return;
-  const entries = await getEntriesByBucket(bucket.id);
-  const safeName = bucket.name.replace(/[^\w.-]+/g, "_");
+// ---- Export ---------------------------------------------------------------
 
-  if (format === "json") {
-    download(
-      `dumpster-${safeName}.json`,
-      "application/json",
-      JSON.stringify({ bucket: bucket.name, entries }, null, 2)
-    );
-  } else {
-    const cols = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
-    const lines = [cols.join(",")];
-    for (const e of entries) lines.push(cols.map((c) => csvCell(e[c])).join(","));
-    download(`dumpster-${safeName}.csv`, "text/csv", lines.join("\n"));
-  }
+const EXPORT_COLS = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+let exportFormat = "xlsx";
+
+function wireExportModal() {
+  els.exportOpen.addEventListener("click", openExportModal);
+  els.exportCancel.addEventListener("click", closeExportModal);
+  els.exportModal.addEventListener("click", (e) => {
+    if (e.target === els.exportModal) closeExportModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.exportModal.hidden) closeExportModal();
+  });
+  els.exportFormat.addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg");
+    if (!btn) return;
+    exportFormat = btn.dataset.format;
+    [...els.exportFormat.children].forEach((s) => s.classList.toggle("active", s === btn));
+    els.formatHint.textContent =
+      exportFormat === "xlsx"
+        ? "One sheet per bucket."
+        : "Each bucket becomes a key holding its dumps.";
+  });
+  els.exportAll.addEventListener("change", () => {
+    els.exportBuckets.querySelectorAll("input").forEach((c) => (c.checked = els.exportAll.checked));
+    refreshExportState();
+  });
+  els.exportBuckets.addEventListener("change", refreshExportState);
+  els.exportGo.addEventListener("click", doExport);
 }
 
-function csvCell(v) {
-  const s = String(v ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+async function openExportModal() {
+  const buckets = await getBuckets();
+  els.exportBuckets.innerHTML = "";
+  for (const b of buckets) {
+    const label = document.createElement("label");
+    label.className = "check";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = b.id;
+    cb.checked = b.id === activeBucketId; // default: the bucket you're viewing
+    const span = document.createElement("span");
+    span.textContent = b.name;
+    label.append(cb, span);
+    els.exportBuckets.appendChild(label);
+  }
+  refreshExportState();
+  els.exportModal.hidden = false;
+}
+
+function closeExportModal() {
+  els.exportModal.hidden = true;
+}
+
+function selectedExportIds() {
+  return [...els.exportBuckets.querySelectorAll("input:checked")].map((i) => i.value);
+}
+
+// Keep the "All buckets" checkbox and Export button in sync with the selection.
+function refreshExportState() {
+  const boxes = [...els.exportBuckets.querySelectorAll("input")];
+  const checked = boxes.filter((b) => b.checked).length;
+  els.exportAll.checked = checked > 0 && checked === boxes.length;
+  els.exportAll.indeterminate = checked > 0 && checked < boxes.length;
+  els.exportGo.disabled = checked === 0;
+}
+
+async function doExport() {
+  const ids = selectedExportIds();
+  if (!ids.length) return;
+  const buckets = (await getBuckets()).filter((b) => ids.includes(b.id));
+
+  // Gather each bucket's rows, oldest-first for natural reading in a sheet.
+  const data = [];
+  for (const b of buckets) {
+    const entries = (await getEntriesByBucket(b.id))
+      .slice()
+      .sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1))
+      .map(pickCols);
+    data.push({ name: b.name, rows: entries });
+  }
+
+  if (exportFormat === "json") {
+    const obj = {};
+    for (const d of data) obj[d.name] = d.rows;
+    download(`dumpster-${stamp()}.json`, "application/json", JSON.stringify(obj, null, 2));
+  } else {
+    const XLSX = await import("./vendor/xlsx.mjs"); // lazy: only load ~1MB on demand
+    const wb = XLSX.utils.book_new();
+    const used = new Set();
+    for (const d of data) {
+      const ws = d.rows.length
+        ? XLSX.utils.json_to_sheet(d.rows, { header: EXPORT_COLS })
+        : XLSX.utils.aoa_to_sheet([EXPORT_COLS]);
+      XLSX.utils.book_append_sheet(wb, ws, uniqueSheetName(d.name, used));
+    }
+    const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    download(`dumpster-${stamp()}.xlsx`, XLSX_MIME, buf);
+  }
+  closeExportModal();
+}
+
+function pickCols(e) {
+  const o = {};
+  for (const c of EXPORT_COLS) o[c] = e[c] ?? "";
+  return o;
+}
+
+// Excel sheet names: <=31 chars, no []:*?/\, and must be unique.
+function uniqueSheetName(name, used) {
+  const base = (name || "Sheet").replace(/[[\]:*?/\\]/g, " ").trim().slice(0, 31) || "Sheet";
+  let candidate = base;
+  let n = 2;
+  while (used.has(candidate.toLowerCase())) {
+    const suffix = ` (${n++})`;
+    candidate = base.slice(0, 31 - suffix.length) + suffix;
+  }
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
+function stamp() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function download(filename, mime, data) {
