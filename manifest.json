@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Dumpster",
+  "version": "0.1.0",
+  "description": "Quick-dump links, snippets, and notes into buckets. Local-first, append-forever.",
+  "permissions": ["contextMenus", "storage", "tabs"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Dump to a bucket",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_page": "dumpster.html"
+}

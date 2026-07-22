@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Dumpster</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"></span>
+        <span>Dumpster</span>
+      </div>
+      <button id="open-viewer" class="link-btn" title="Open full dumpster">View all ↗</button>
+    </header>
+
+    <main class="panel">
+      <label class="field-label" for="bucket">Bucket</label>
+      <div class="bucket-row">
+        <select id="bucket" class="bucket-select"></select>
+        <button id="new-bucket" class="ghost-btn" title="Create a new bucket">＋</button>
+      </div>
+
+      <label class="field-label" for="content">Dump</label>
+      <textarea
+        id="content"
+        class="content"
+        rows="3"
+        placeholder="Paste a link, snippet, or note…"
+        autofocus
+      ></textarea>
+
+      <label class="attach">
+        <input type="checkbox" id="attach-page" checked />
+        <span id="attach-label" class="attach-label">Attach this page</span>
+      </label>
+
+      <ul id="staged" class="staged" hidden></ul>
+
+      <div class="actions">
+        <button id="add-more" class="secondary-btn">Add another</button>
+        <button id="submit" class="primary-btn">Dump</button>
+      </div>
+      <p class="hint">Tip: right-click any page, link, or selection → <b>Dump to</b>.</p>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

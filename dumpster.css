@@ -1,0 +1,412 @@
+:root {
+  --bg: #ffffff;
+  --panel: #f7f8f8;
+  --text: #14171a;
+  --muted: #6b7280;
+  --border: #e4e7eb;
+  --accent: #10b981;
+  --accent-soft: rgba(16, 185, 129, 0.12);
+  --danger: #ef4444;
+  --chip: #eef2f1;
+  --row-hover: #f8faf9;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.06);
+  /* status pill tones */
+  --green: #059669;
+  --amber: #b45309;
+  --red: #dc2626;
+  --blue: #2563eb;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --panel: #1e2126;
+    --text: #e8eaed;
+    --muted: #9aa0a6;
+    --border: #30343b;
+    --accent: #10b981;
+    --accent-soft: rgba(16, 185, 129, 0.16);
+    --danger: #f87171;
+    --chip: #262a30;
+    --row-hover: #1c1f24;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.brand h1 {
+  font-size: 18px;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.25);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 7px 13px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 550;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.subtle {
+  background: none;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+.btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 28px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-wrap: wrap;
+}
+.tab {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 9px 14px;
+  border-radius: 8px 8px 0 0;
+  font: inherit;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab .badge {
+  margin-left: 7px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--chip);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+.tab.active .badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tab.add {
+  color: var(--muted);
+  font-size: 16px;
+  padding: 9px 12px;
+}
+
+.content-area {
+  padding: 20px 28px 60px;
+  max-width: 1200px;
+}
+
+.bucket-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bucket-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.bucket-title h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+}
+.count {
+  color: var(--muted);
+  font-size: 13px;
+}
+.bucket-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  width: 13px;
+  height: 13px;
+  border: 1.6px solid var(--muted);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.search-icon::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 5px;
+  height: 1.6px;
+  background: var(--muted);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+.search {
+  width: 190px;
+  padding: 7px 10px 7px 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  background: var(--bg);
+  /* clip (not hidden) so the sticky <thead> pins to the viewport, under the
+     sticky app-header, instead of pinning inside this box and covering row 1. */
+  overflow: clip;
+}
+
+.entries {
+  width: 100%;
+  border-collapse: collapse;
+}
+.entries th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 11px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 61px;
+}
+.entries td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.entries tr:last-child td {
+  border-bottom: none;
+}
+.entries tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.col-time {
+  width: 120px;
+}
+.col-source {
+  width: 200px;
+}
+.col-status {
+  width: 130px;
+}
+.col-actions {
+  width: 40px;
+}
+
+.cell-time {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cell-content {
+  word-break: break-word;
+}
+.cell-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.cell-content a:hover {
+  text-decoration: underline;
+}
+.src-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+  display: inline-block;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.src-link:hover {
+  color: var(--accent);
+}
+
+.editable {
+  width: 100%;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 5px 7px;
+  border-radius: 6px;
+  resize: vertical;
+}
+.editable:hover {
+  border-color: var(--border);
+}
+.editable:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+input.editable::placeholder,
+textarea.editable::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* Status renders as a colored pill whose tone is inferred from its text. */
+.status-input {
+  width: auto;
+  font-weight: 600;
+  font-size: 12.5px;
+  border-radius: 999px;
+  padding: 5px 11px;
+}
+.status-input[data-tone="empty"] {
+  font-weight: 500;
+  color: var(--muted);
+}
+.status-input[data-tone="green"] {
+  --tone: var(--green);
+}
+.status-input[data-tone="amber"] {
+  --tone: var(--amber);
+}
+.status-input[data-tone="red"] {
+  --tone: var(--red);
+}
+.status-input[data-tone="blue"] {
+  --tone: var(--blue);
+}
+.status-input:not([data-tone="empty"]) {
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  border-color: transparent;
+}
+.status-input:not([data-tone="empty"]):hover {
+  border-color: color-mix(in srgb, var(--tone) 45%, transparent);
+}
+.status-input:focus {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.row-delete {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.row-delete:hover {
+  color: var(--danger);
+  background: var(--chip);
+}
+
+.empty {
+  padding: 56px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.empty::before {
+  content: "";
+  display: block;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 16px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  border: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.empty b {
+  color: var(--text);
+}
