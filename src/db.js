@@ -9,6 +9,10 @@ const STORE = "entries";
 
 let dbPromise = null;
 
+// The three workflow states. New dumps default to the first (To Do).
+export const STATUSES = ["To Do", "In Process", "Done"];
+export const DEFAULT_STATUS = STATUSES[0];
+
 function openDB() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
@@ -49,7 +53,7 @@ export function makeEntry({ bucketId, content, sourceUrl = "", sourceTitle = "" 
     content: (content || "").trim(),
     sourceUrl,
     sourceTitle,
-    status: "",
+    status: DEFAULT_STATUS,
     notes: "",
     createdAt: new Date().toISOString(),
   };
@@ -71,6 +75,11 @@ export async function getEntriesByBucket(bucketId) {
   const rows = await reqToPromise(index.getAll(IDBKeyRange.only(bucketId)));
   // Newest first.
   return rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export async function getAllEntries() {
+  const store = await tx("readonly");
+  return reqToPromise(store.getAll());
 }
 
 export async function countByBucket() {

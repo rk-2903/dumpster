@@ -340,41 +340,48 @@ textarea.editable::placeholder {
   opacity: 0.7;
 }
 
-/* Status renders as a colored pill whose tone is inferred from its text. */
-.status-input {
-  width: auto;
+/* Status is a three-state <select> rendered as a colored pill. */
+.status-select {
+  appearance: none;
+  font: inherit;
   font-weight: 600;
   font-size: 12.5px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  padding: 5px 11px;
+  padding: 5px 24px 5px 11px;
+  cursor: pointer;
+  color: var(--tone, var(--muted));
+  background-color: color-mix(in srgb, var(--tone) 14%, transparent);
+  background-image: linear-gradient(45deg, transparent 50%, var(--tone) 50%),
+    linear-gradient(135deg, var(--tone) 50%, transparent 50%);
+  background-position: right 12px center, right 8px center;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
 }
-.status-input[data-tone="empty"] {
-  font-weight: 500;
-  color: var(--muted);
-}
-.status-input[data-tone="green"] {
+.status-select[data-tone="green"] {
   --tone: var(--green);
 }
-.status-input[data-tone="amber"] {
+.status-select[data-tone="amber"] {
   --tone: var(--amber);
 }
-.status-input[data-tone="red"] {
-  --tone: var(--red);
-}
-.status-input[data-tone="blue"] {
+.status-select[data-tone="blue"] {
   --tone: var(--blue);
 }
-.status-input:not([data-tone="empty"]) {
-  color: var(--tone);
-  background: color-mix(in srgb, var(--tone) 14%, transparent);
-  border-color: transparent;
-}
-.status-input:not([data-tone="empty"]):hover {
+.status-select:hover {
   border-color: color-mix(in srgb, var(--tone) 45%, transparent);
 }
-.status-input:focus {
+.status-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 22%, transparent);
+}
+.status-select option {
   color: var(--text);
   background: var(--bg);
+  font-weight: 500;
+}
+
+.content-edit {
+  min-height: 40px;
 }
 
 .row-delete {

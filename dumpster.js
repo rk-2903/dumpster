@@ -9,9 +9,12 @@ import {
 } from "./src/buckets.js";
 import {
   getEntriesByBucket,
+  getAllEntries,
   countByBucket,
   updateEntry,
   deleteEntry,
+  STATUSES,
+  DEFAULT_STATUS,
 } from "./src/db.js";
 
 const els = {
@@ -33,6 +36,7 @@ let rowIndex = []; // { tr, hay } for client-side filtering
 
 async function init() {
   await ensureSeeded();
+  await migrateStatuses();
   activeBucketId = await getLastBucketId();
   await renderTabs();
   await renderBucket();
@@ -146,7 +150,7 @@ function renderRow(entry) {
 
   const content = document.createElement("td");
   content.className = "cell-content";
-  content.appendChild(linkify(entry.content));
+  renderContentView(content, entry);
 
   const source = document.createElement("td");
   if (entry.sourceUrl) {
@@ -161,18 +165,7 @@ function renderRow(entry) {
   }
 
   const status = document.createElement("td");
-  const statusEl = makeEditable("input", entry.status, "＋ status", (val) =>
-    updateEntry(entry.id, { status: val })
-  );
-  statusEl.classList.add("status-input");
-  const applyTone = () => {
-    statusEl.dataset.tone = statusTone(statusEl.value);
-    // Size the pill to hug its text (placeholder when empty).
-    statusEl.size = Math.max((statusEl.value || "＋ status").length + 2, 7);
-  };
-  applyTone();
-  statusEl.addEventListener("input", applyTone);
-  status.appendChild(statusEl);
+  status.appendChild(renderStatusSelect(entry));
 
   const notes = document.createElement("td");
   notes.appendChild(
@@ -198,16 +191,89 @@ function renderRow(entry) {
   return tr;
 }
 
-// Infer a pill color from free-text status. Keeps status freeform (works for any
-// bucket) while giving the job-tracker flow at-a-glance color.
+// The dumped text: linkified read-only view, double-click to edit inline.
+function renderContentView(td, entry) {
+  td.textContent = "";
+  td.title = "Double-click to edit";
+  td.appendChild(linkify(entry.content));
+  td.ondblclick = (e) => {
+    // Don't hijack a click meant for a link.
+    if (e.target.tagName === "A") return;
+    editContent(td, entry);
+  };
+}
+
+function editContent(td, entry) {
+  td.textContent = "";
+  td.title = "";
+  td.ondblclick = null;
+  const ta = document.createElement("textarea");
+  ta.className = "editable content-edit";
+  ta.value = entry.content;
+  ta.rows = Math.min(6, entry.content.split("\n").length + 1);
+  const save = async () => {
+    const val = ta.value.trim();
+    if (val && val !== entry.content) {
+      entry.content = val;
+      await updateEntry(entry.id, { content: val });
+    }
+    renderContentView(td, entry);
+  };
+  ta.addEventListener("blur", save);
+  ta.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey) {
+      ev.preventDefault();
+      ta.blur();
+    } else if (ev.key === "Escape") {
+      ta.value = entry.content; // discard
+      ta.blur();
+    }
+  });
+  td.appendChild(ta);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+// Status is a three-state select rendered as a colored pill.
+function renderStatusSelect(entry) {
+  const sel = document.createElement("select");
+  sel.className = "status-select";
+  for (const s of STATUSES) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    sel.appendChild(opt);
+  }
+  sel.value = STATUSES.includes(entry.status) ? entry.status : DEFAULT_STATUS;
+  sel.dataset.tone = statusTone(sel.value);
+  sel.addEventListener("change", () => {
+    entry.status = sel.value;
+    sel.dataset.tone = statusTone(sel.value);
+    updateEntry(entry.id, { status: sel.value });
+  });
+  return sel;
+}
+
 function statusTone(value) {
-  const s = (value || "").toLowerCase();
-  if (!s) return "empty";
-  // Match on stems (no trailing boundary) so "applied", "rejecting" etc. hit.
-  if (/\b(appl|sent|done|accept|offer|complete|hired|submit|approv|got)/.test(s)) return "green";
-  if (/\b(reject|declin|clos|ghost|lost|withdraw|drop|pass)/.test(s)) return "red";
-  if (/\b(pending|wait|referr|follow|review|progress|need|todo|later|soon|schedul)/.test(s)) return "amber";
-  return "blue";
+  if (value === "Done") return "green";
+  if (value === "In Process") return "blue";
+  return "amber"; // To Do
+}
+
+// One-time cleanup: map any legacy free-text status onto the three states.
+async function migrateStatuses() {
+  const all = await getAllEntries();
+  const updates = [];
+  for (const e of all) {
+    if (STATUSES.includes(e.status)) continue;
+    const t = (e.status || "").toLowerCase();
+    let next = DEFAULT_STATUS;
+    if (/\b(done|complete|accept|offer|hired|approv|closed|reject|declin)/.test(t)) next = "Done";
+    else if (/\b(process|progress|interview|review|wait|pending|follow|referr|sent|appl|dm|need|schedul|submit)/.test(t))
+      next = "In Process";
+    if (next !== e.status) updates.push(updateEntry(e.id, { status: next }));
+  }
+  await Promise.all(updates);
 }
 
 function makeEditable(tag, value, placeholder, onSave) {
