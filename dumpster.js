@@ -10,6 +10,7 @@ import {
 import {
   getEntriesByBucket,
   getAllEntries,
+  addEntries,
   countByBucket,
   updateEntry,
   deleteEntry,
@@ -39,6 +40,10 @@ const els = {
   exportBuckets: document.getElementById("export-buckets"),
   exportCancel: document.getElementById("export-cancel"),
   exportGo: document.getElementById("export-go"),
+  // Import
+  importOpen: document.getElementById("import-open"),
+  importFile: document.getElementById("import-file"),
+  toast: document.getElementById("toast"),
 };
 
 let activeBucketId = null;
@@ -59,6 +64,7 @@ async function init() {
   els.search.addEventListener("input", renderView);
   els.viewToggle.addEventListener("click", onToggleView);
   wireExportModal();
+  wireImport();
 
   // A dump made from the context menu while this tab is open should show up.
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -614,6 +620,128 @@ function uniqueSheetName(name, used) {
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// ---- Import ----------------------------------------------------------------
+
+function wireImport() {
+  els.importOpen.addEventListener("click", () => els.importFile.click());
+  els.importFile.addEventListener("change", async () => {
+    const file = els.importFile.files[0];
+    els.importFile.value = ""; // allow re-picking the same file
+    if (file) await handleImport(file);
+  });
+}
+
+async function handleImport(file) {
+  try {
+    const isJson = /\.json$/i.test(file.name);
+    const byBucket = isJson ? parseJsonImport(await file.text()) : await parseXlsxImport(file);
+    const result = await mergeImport(byBucket);
+    await renderTabs();
+    await renderBucket();
+    showToast(
+      `Imported ${result.added} ${result.added === 1 ? "dump" : "dumps"}` +
+        (result.skipped ? `, skipped ${result.skipped} duplicate${result.skipped === 1 ? "" : "s"}` : "")
+    );
+  } catch (err) {
+    console.error(err);
+    showToast(`Import failed: ${err.message || "unreadable file"}`, true);
+  }
+}
+
+// Our JSON export is { "Bucket name": [ {cols...} ] }. Return that map of rows.
+function parseJsonImport(text) {
+  const data = JSON.parse(text);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("expected a { bucket: [dumps] } object");
+  }
+  const out = {};
+  for (const [name, rows] of Object.entries(data)) {
+    if (Array.isArray(rows)) out[name] = rows;
+  }
+  return out;
+}
+
+// Each xlsx sheet is a bucket; rows come from the header row.
+async function parseXlsxImport(file) {
+  const XLSX = await import("./vendor/xlsx.mjs"); // lazy
+  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+  const out = {};
+  for (const name of wb.SheetNames) {
+    out[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: "", raw: false });
+  }
+  return out;
+}
+
+// Append rows into name-matched buckets (creating missing ones), skipping any
+// row that already exists (same content + timestamp).
+async function mergeImport(byBucket) {
+  let added = 0;
+  let skipped = 0;
+  const buckets = await getBuckets();
+  const byName = new Map(buckets.map((b) => [b.name.toLowerCase(), b]));
+
+  for (const [rawName, rows] of Object.entries(byBucket)) {
+    const name = String(rawName).trim();
+    if (!name || !rows.length) continue;
+
+    let bucket = byName.get(name.toLowerCase());
+    if (!bucket) {
+      bucket = await addBucket(name);
+      byName.set(name.toLowerCase(), bucket);
+    }
+
+    const seen = new Set((await getEntriesByBucket(bucket.id)).map(dedupeKey));
+    const toAdd = [];
+    for (const row of rows) {
+      const entry = entryFromImport(bucket.id, row);
+      if (!entry.content) continue; // skip empty
+      const key = dedupeKey(entry);
+      if (seen.has(key)) {
+        skipped++;
+        continue;
+      }
+      seen.add(key);
+      toAdd.push(entry);
+    }
+    await addEntries(toAdd);
+    added += toAdd.length;
+  }
+  return { added, skipped };
+}
+
+function dedupeKey(e) {
+  return `${(e.content || "").trim()} ${e.createdAt || ""}`;
+}
+
+function entryFromImport(bucketId, row) {
+  const createdAt = toIso(row.createdAt);
+  return {
+    id: crypto.randomUUID(),
+    bucketId,
+    content: String(row.content ?? "").trim(),
+    sourceUrl: String(row.sourceUrl ?? ""),
+    sourceTitle: String(row.sourceTitle ?? ""),
+    status: STATUSES.includes(row.status) ? row.status : DEFAULT_STATUS,
+    notes: String(row.notes ?? ""),
+    createdAt,
+  };
+}
+
+function toIso(value) {
+  if (!value) return new Date().toISOString();
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+let toastTimer = null;
+function showToast(msg, isError = false) {
+  els.toast.textContent = msg;
+  els.toast.classList.toggle("toast-error", isError);
+  els.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (els.toast.hidden = true), 3200);
 }
 
 function download(filename, mime, data) {

@@ -21,6 +21,11 @@ you meant to come back to.
   Content links are clickable.
 - **Export** — pick any buckets (or all) and export to **Excel** (one sheet per
   bucket) or **JSON** (each bucket a key holding its dumps).
+- **Import** — load an **Excel** or **JSON** file back in. Dumps append into
+  buckets matched by name (missing buckets are created); rows that already exist
+  (same content + timestamp) are skipped, so re-importing the same file is safe.
+- **List or Board** — view a bucket as a table or a **Kanban board** (To Do /
+  In Process / Done); drag a card between columns to change its status.
 
 Data lives in the browser (IndexedDB + `chrome.storage.local`). Nothing leaves
 your machine. Cross-device sync (e.g. to a Google Sheet) is a deliberate Phase-2
