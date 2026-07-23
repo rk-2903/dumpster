@@ -26,6 +26,10 @@
           <span id="entry-count" class="count"></span>
         </div>
         <div class="bucket-tools">
+          <div class="segmented view-toggle" id="view-toggle">
+            <button type="button" class="seg active" data-view="list">List</button>
+            <button type="button" class="seg" data-view="board">Board</button>
+          </div>
           <div class="search-wrap">
             <span class="search-icon" aria-hidden="true"></span>
             <input id="search" class="search" type="search" placeholder="Filter this bucket…" />
@@ -35,7 +39,7 @@
         </div>
       </div>
 
-      <div class="table-wrap">
+      <div class="table-wrap" id="list-view">
         <table id="entries" class="entries">
           <thead>
             <tr>
@@ -53,6 +57,8 @@
           Nothing here yet. Right-click a page → <b>Dump to</b>, or use the toolbar popup.
         </div>
       </div>
+
+      <div class="board" id="board-view" hidden></div>
     </main>
 
     <div id="export-modal" class="modal-backdrop" hidden>

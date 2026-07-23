@@ -27,6 +27,9 @@ const els = {
   rename: document.getElementById("rename-bucket"),
   del: document.getElementById("delete-bucket"),
   search: document.getElementById("search"),
+  viewToggle: document.getElementById("view-toggle"),
+  listView: document.getElementById("list-view"),
+  board: document.getElementById("board-view"),
   // Export modal
   exportOpen: document.getElementById("export-open"),
   exportModal: document.getElementById("export-modal"),
@@ -39,18 +42,22 @@ const els = {
 };
 
 let activeBucketId = null;
-let rowIndex = []; // { tr, hay } for client-side filtering
+let currentEntries = []; // entries for the active bucket (unfiltered)
+let currentView = "list"; // "list" | "board"
 
 async function init() {
   await ensureSeeded();
   await migrateStatuses();
+  currentView = (await getSetting("viewMode")) === "board" ? "board" : "list";
+  syncViewToggle();
   activeBucketId = await getLastBucketId();
   await renderTabs();
   await renderBucket();
 
   els.rename.addEventListener("click", onRename);
   els.del.addEventListener("click", onDelete);
-  els.search.addEventListener("input", applyFilter);
+  els.search.addEventListener("input", renderView);
+  els.viewToggle.addEventListener("click", onToggleView);
   wireExportModal();
 
   // A dump made from the context menu while this tab is open should show up.
@@ -93,57 +100,179 @@ async function renderTabs() {
 async function renderBucket() {
   const buckets = await getBuckets();
   const bucket = buckets.find((b) => b.id === activeBucketId);
-  if (!bucket) {
-    els.bucketName.textContent = "—";
-    els.entryCount.textContent = "";
-    els.rows.innerHTML = "";
-    els.table.hidden = true;
-    els.empty.hidden = false;
-    return;
-  }
-  els.bucketName.textContent = bucket.name;
-
-  const entries = await getEntriesByBucket(bucket.id);
-  els.entryCount.textContent = entries.length
-    ? `${entries.length} ${entries.length === 1 ? "entry" : "entries"}`
-    : "";
-  els.rows.innerHTML = "";
-
-  if (!entries.length) {
-    rowIndex = [];
-    els.table.hidden = true;
-    els.empty.hidden = false;
-    return;
-  }
-  els.table.hidden = false;
-  els.empty.hidden = true;
-
-  rowIndex = [];
-  for (const entry of entries) {
-    const tr = renderRow(entry);
-    els.rows.appendChild(tr);
-    const hay = [entry.content, entry.sourceTitle, entry.sourceUrl, entry.status, entry.notes]
-      .join(" ")
-      .toLowerCase();
-    rowIndex.push({ tr, hay });
-  }
-  applyFilter();
+  els.bucketName.textContent = bucket ? bucket.name : "—";
+  currentEntries = bucket ? await getEntriesByBucket(bucket.id) : [];
+  renderView();
 }
 
-function applyFilter() {
+// Entries matching the current search box.
+function visibleEntries() {
   const q = els.search.value.trim().toLowerCase();
-  let shown = 0;
-  for (const { tr, hay } of rowIndex) {
-    const match = !q || hay.includes(q);
-    tr.style.display = match ? "" : "none";
-    if (match) shown++;
-  }
-  const total = rowIndex.length;
+  if (!q) return currentEntries;
+  return currentEntries.filter((e) =>
+    [e.content, e.sourceTitle, e.sourceUrl, e.status, e.notes].join(" ").toLowerCase().includes(q)
+  );
+}
+
+function updateCount(shown) {
+  const total = currentEntries.length;
+  const q = els.search.value.trim();
   els.entryCount.textContent = !total
     ? ""
     : q
     ? `${shown} of ${total}`
     : `${total} ${total === 1 ? "entry" : "entries"}`;
+}
+
+// Render whichever view is active from the in-memory entries.
+function renderView() {
+  const entries = visibleEntries();
+  updateCount(entries.length);
+  const board = currentView === "board";
+  els.listView.hidden = board;
+  els.board.hidden = !board;
+  if (board) renderBoard(entries);
+  else renderList(entries);
+}
+
+function renderList(entries) {
+  els.rows.innerHTML = "";
+  els.table.hidden = entries.length === 0;
+  els.empty.hidden = entries.length !== 0;
+  for (const entry of entries) els.rows.appendChild(renderRow(entry));
+}
+
+// ---- Board (Kanban) view ----
+
+function renderBoard(entries) {
+  els.board.innerHTML = "";
+  for (const status of STATUSES) {
+    const col = document.createElement("div");
+    col.className = "board-col";
+    col.dataset.status = status;
+    col.dataset.tone = statusTone(status);
+
+    const items = entries.filter(
+      (e) => (STATUSES.includes(e.status) ? e.status : DEFAULT_STATUS) === status
+    );
+
+    const head = document.createElement("div");
+    head.className = "board-col-head";
+    const title = document.createElement("span");
+    title.className = "board-col-title";
+    title.textContent = status;
+    const count = document.createElement("span");
+    count.className = "board-col-count";
+    count.textContent = items.length;
+    head.append(title, count);
+    col.appendChild(head);
+
+    const list = document.createElement("div");
+    list.className = "board-col-list";
+    for (const entry of items) list.appendChild(renderCard(entry));
+    col.appendChild(list);
+
+    wireDropTarget(col, status);
+    els.board.appendChild(col);
+  }
+}
+
+function renderCard(entry) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.draggable = true;
+  card.dataset.id = entry.id;
+
+  const body = document.createElement("div");
+  body.className = "card-content";
+  body.appendChild(linkify(entry.content));
+  card.appendChild(body);
+
+  if (entry.sourceUrl) {
+    const a = document.createElement("a");
+    a.className = "card-source";
+    a.href = entry.sourceUrl;
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    a.textContent = entry.sourceTitle || entry.sourceUrl;
+    a.title = entry.sourceUrl;
+    card.appendChild(a);
+  }
+  if (entry.notes) {
+    const n = document.createElement("div");
+    n.className = "card-notes";
+    n.textContent = entry.notes;
+    card.appendChild(n);
+  }
+
+  const foot = document.createElement("div");
+  foot.className = "card-foot";
+  const time = document.createElement("span");
+  time.textContent = formatTime(entry.createdAt);
+  time.title = new Date(entry.createdAt).toLocaleString();
+  const del = document.createElement("button");
+  del.className = "row-delete";
+  del.textContent = "✕";
+  del.title = "Delete this entry";
+  del.addEventListener("click", async () => {
+    await deleteEntry(entry.id);
+    currentEntries = currentEntries.filter((e) => e.id !== entry.id);
+    renderTabs();
+    renderView();
+  });
+  foot.append(time, del);
+  card.appendChild(foot);
+
+  card.addEventListener("dragstart", (e) => {
+    card.classList.add("dragging");
+    e.dataTransfer.setData("text/plain", entry.id);
+    e.dataTransfer.effectAllowed = "move";
+  });
+  card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  return card;
+}
+
+function wireDropTarget(col, status) {
+  col.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    col.classList.add("drop-over");
+  });
+  col.addEventListener("dragleave", (e) => {
+    if (!col.contains(e.relatedTarget)) col.classList.remove("drop-over");
+  });
+  col.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    col.classList.remove("drop-over");
+    const id = e.dataTransfer.getData("text/plain");
+    const entry = currentEntries.find((x) => x.id === id);
+    if (!entry || entry.status === status) return;
+    entry.status = status;
+    await updateEntry(id, { status });
+    renderView(); // re-render board so cards + counts move
+  });
+}
+
+function onToggleView(e) {
+  const btn = e.target.closest(".seg");
+  if (!btn || btn.dataset.view === currentView) return;
+  currentView = btn.dataset.view;
+  setSetting("viewMode", currentView);
+  syncViewToggle();
+  renderView();
+}
+
+function syncViewToggle() {
+  [...els.viewToggle.children].forEach((s) =>
+    s.classList.toggle("active", s.dataset.view === currentView)
+  );
+}
+
+function getSetting(key) {
+  return new Promise((resolve) => chrome.storage.local.get(key, (r) => resolve(r[key])));
+}
+function setSetting(key, value) {
+  chrome.storage.local.set({ [key]: value });
 }
 
 function renderRow(entry) {
