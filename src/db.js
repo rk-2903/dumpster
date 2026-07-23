@@ -82,6 +82,11 @@ export async function getAllEntries() {
   return reqToPromise(store.getAll());
 }
 
+export async function getEntry(id) {
+  const store = await tx("readonly");
+  return reqToPromise(store.get(id));
+}
+
 export async function countByBucket() {
   const store = await tx("readonly");
   const rows = await reqToPromise(store.getAll());

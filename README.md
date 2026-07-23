@@ -52,10 +52,33 @@ Reload the extension from that page after any code change.
 | `dumpster.html/.css/.js` | Full-page review table + export |
 | `icons/` | Generated PNG icons |
 
+## Google sync (setup — in progress)
+
+Cloud sync mirrors your dumps into your **own** Google Drive: one "Dumpster"
+spreadsheet, a tab per bucket, a row per dump. Local IndexedDB stays the source of
+truth; syncing is a background, non-blocking push so capture stays instant. Uses the
+narrow `drive.file` scope (only files the app creates) via `chrome.identity`.
+
+**One-time developer setup** (needed before the Connect button can authenticate):
+
+1. **Pin the extension ID** — add a `"key"` to `manifest.json` so the ID is stable
+   (`chrome://extensions` → pack, or generate a key pair). The OAuth client is bound
+   to this ID.
+2. In the [Google Cloud Console](https://console.cloud.google.com/): create a project
+   → **APIs & Services → Enabled APIs**: enable **Google Sheets API** → **OAuth
+   consent screen** (External; add yourself as a test user) → **Credentials → Create
+   OAuth client ID → type: Chrome Extension**, with your pinned extension ID.
+3. Put the client ID into `manifest.json`'s `oauth2.client_id` (replacing
+   `REPLACE_WITH_YOUR_CLIENT_ID...`).
+
+While the consent screen is in **Testing**, only added test users (≤100) can connect.
+To ship publicly, submit for verification — `drive.file` is non-restricted, so it's the
+lighter brand verification, not the restricted-scope security assessment.
+
 ## Roadmap (Phase 2)
 
-- **Sync / global access** — push buckets to a Google Sheet (one tab per bucket)
-  so the same data is reachable from your phone and shareable.
+- **Docs sync target** — a switchable second provider with inline screenshots
+  (`insertInlineImage`) and Drive OCR, alongside the Sheets target.
 - **AI assistance** — surface time-sensitive dumps (e.g. "follow up on this
   referral") and suggest the right bucket at capture time.
 - **Per-bucket typed fields** — let a bucket define its own columns instead of the

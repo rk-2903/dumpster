@@ -3,6 +3,8 @@
 
 import { getBuckets, ensureSeeded, setLastBucketId, signalDump } from "./buckets.js";
 import { addEntry, makeEntry } from "./db.js";
+import { enqueueUpsert } from "./outbox.js";
+import { drain } from "./sync.js";
 
 const PARENT_ID = "dumpster-parent";
 const CONTEXTS = ["selection", "link", "page", "image"];
@@ -71,6 +73,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   await addEntry(entry);
   await setLastBucketId(bucketId);
   await signalDump(); // refresh any open viewer tab live
+  await enqueueUpsert(entry.id); // queue for cloud sync
   flashBadge();
 });
 
@@ -108,3 +111,16 @@ requestPersistence();
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.buckets) rebuildMenus();
 });
+
+// ---- Cloud sync drain ----
+// Any context (popup/viewer/context-menu) pings us via runtime.sendMessage after
+// enqueuing outbox ops; a periodic alarm retries anything still pending.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === "dumpster-sync") drain();
+});
+chrome.alarms.create("dumpster-sync", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === "dumpster-sync") drain();
+});
+chrome.runtime.onStartup.addListener(drain);
+drain();
