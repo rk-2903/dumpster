@@ -66,12 +66,25 @@ async function init() {
   wireExportModal();
   wireImport();
 
-  // A dump made from the context menu while this tab is open should show up.
+  // Live-refresh when another context changes data: a bucket add/rename/delete
+  // (changes.buckets) or a dump from the popup / context menu (changes.dumpSignal,
+  // which the entry write can't announce on its own — IndexedDB has no
+  // cross-tab change event).
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.buckets) renderTabs();
+    if (area !== "local") return;
+    if (changes.dumpSignal) {
+      renderTabs();
+      renderBucket();
+    } else if (changes.buckets) {
+      renderTabs();
+    }
   });
+  // Fallback: a frozen/discarded tab may miss the event; re-fetch on refocus.
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) renderBucket();
+    if (!document.hidden) {
+      renderTabs();
+      renderBucket();
+    }
   });
 }
 

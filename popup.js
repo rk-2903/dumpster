@@ -4,6 +4,7 @@ import {
   addBucket,
   getLastBucketId,
   setLastBucketId,
+  signalDump,
 } from "./src/buckets.js";
 import { addEntries, makeEntry } from "./src/db.js";
 
@@ -140,6 +141,7 @@ async function onSubmit() {
   const entries = items.map((content) => makeEntry({ bucketId, content, ...source }));
   await addEntries(entries);
   await setLastBucketId(bucketId);
+  await signalDump(); // tell any open viewer tab to refresh live
 
   staged = [];
   els.content.value = "";

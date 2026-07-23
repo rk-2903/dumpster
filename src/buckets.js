@@ -64,3 +64,10 @@ export async function getLastBucketId() {
 export function setLastBucketId(id) {
   return set({ [LAST_KEY]: id });
 }
+
+// Cross-context "a dump was added" ping. IndexedDB has no change event that
+// reaches an already-open viewer tab, so writing an always-changing value to
+// chrome.storage lets the viewer's storage.onChanged listener refresh live.
+export function signalDump() {
+  return set({ dumpSignal: Date.now() });
+}

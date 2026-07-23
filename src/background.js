@@ -1,7 +1,7 @@
 // Background service worker: seeds buckets, keeps the right-click "Dump to ▸"
 // menu in sync with the bucket list, and handles reflex dumps from that menu.
 
-import { getBuckets, ensureSeeded, setLastBucketId } from "./buckets.js";
+import { getBuckets, ensureSeeded, setLastBucketId, signalDump } from "./buckets.js";
 import { addEntry, makeEntry } from "./db.js";
 
 const PARENT_ID = "dumpster-parent";
@@ -70,6 +70,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   });
   await addEntry(entry);
   await setLastBucketId(bucketId);
+  await signalDump(); // refresh any open viewer tab live
   flashBadge();
 });
 
