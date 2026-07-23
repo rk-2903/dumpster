@@ -754,3 +754,10 @@ textarea.editable::placeholder {
   opacity: 0.55;
   cursor: default;
 }
+
+.cloud-status-row {
+  align-items: flex-start;
+}
+.cloud-status-row #cloud-status-text {
+  word-break: break-word;
+}

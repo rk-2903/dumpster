@@ -819,7 +819,12 @@ async function refreshCloudModal() {
   if (!conn.connected) return;
   els.cloudEmail.textContent = conn.email || "your account";
   const state = (await getSetting("syncState")) || "idle";
-  els.cloudStatusText.textContent = SYNC_LABEL[state] || "Idle";
+  let label = SYNC_LABEL[state] || "Idle";
+  if (state === "error") {
+    const detail = await getSetting("syncError");
+    if (detail) label = `Sync error — ${detail}`;
+  }
+  els.cloudStatusText.textContent = label;
   els.cloudStatusDot.dataset.state = state;
   const sid = await getSetting("sheetsSpreadsheetId");
   els.cloudOpenSheet.hidden = !sid;

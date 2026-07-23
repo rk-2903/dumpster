@@ -17,8 +17,8 @@ function providerFor(target, deps = {}) {
 function getTarget() {
   return new Promise((r) => chrome.storage.local.get("syncTarget", (o) => r(o.syncTarget || "sheets")));
 }
-function setSyncState(state) {
-  return new Promise((r) => chrome.storage.local.set({ syncState: state }, r));
+function setSyncState(state, error = "") {
+  return new Promise((r) => chrome.storage.local.set({ syncState: state, syncError: error }, r));
 }
 
 /**
@@ -31,6 +31,7 @@ function setSyncState(state) {
 export async function processOps(ops, { provider, getEntry: getEntryFn, nameById }) {
   const done = [];
   let failed = false;
+  let error = "";
   for (const op of ops) {
     try {
       if (op.kind === "upsert") {
@@ -51,10 +52,11 @@ export async function processOps(ops, { provider, getEntry: getEntryFn, nameById
     } catch (err) {
       console.warn("[dumpster] sync op failed:", op.kind, err.message);
       failed = true;
+      error = err.message;
       break; // preserve order; retry later
     }
   }
-  return { done, failed };
+  return { done, failed, error };
 }
 
 let draining = false;
@@ -78,12 +80,12 @@ export async function drain() {
     await setSyncState("syncing");
     const buckets = await getBuckets();
     const nameById = new Map(buckets.map((b) => [b.id, b.name]));
-    const { done, failed } = await processOps(ops, { provider, getEntry, nameById });
+    const { done, failed, error } = await processOps(ops, { provider, getEntry, nameById });
     await removeOps(done);
-    await setSyncState(failed ? "error" : "synced");
+    await setSyncState(failed ? "error" : "synced", failed ? error : "");
   } catch (err) {
     console.warn("[dumpster] drain failed:", err.message);
-    await setSyncState("error");
+    await setSyncState("error", err.message);
   } finally {
     draining = false;
   }
