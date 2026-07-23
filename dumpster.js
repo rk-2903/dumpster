@@ -17,6 +17,13 @@ import {
   STATUSES,
   DEFAULT_STATUS,
 } from "./src/db.js";
+import {
+  enqueueUpsert,
+  enqueueUpsertMany,
+  enqueueDelete,
+  enqueueBucketOp,
+} from "./src/outbox.js";
+import { connect as gConnect, disconnect as gDisconnect, getConnection } from "./src/googleAuth.js";
 
 const els = {
   tabs: document.getElementById("tabs"),
@@ -44,6 +51,20 @@ const els = {
   importOpen: document.getElementById("import-open"),
   importFile: document.getElementById("import-file"),
   toast: document.getElementById("toast"),
+  // Cloud sync
+  cloudOpen: document.getElementById("cloud-open"),
+  cloudDot: document.getElementById("cloud-dot"),
+  cloudModal: document.getElementById("cloud-modal"),
+  cloudDisconnected: document.getElementById("cloud-disconnected"),
+  cloudConnected: document.getElementById("cloud-connected"),
+  cloudEmail: document.getElementById("cloud-email"),
+  cloudStatusDot: document.getElementById("cloud-status-dot"),
+  cloudStatusText: document.getElementById("cloud-status-text"),
+  cloudOpenSheet: document.getElementById("cloud-open-sheet"),
+  cloudCancel: document.getElementById("cloud-cancel"),
+  cloudConnect: document.getElementById("cloud-connect"),
+  cloudDisconnect: document.getElementById("cloud-disconnect"),
+  cloudDone: document.getElementById("cloud-done"),
 };
 
 let activeBucketId = null;
@@ -65,11 +86,13 @@ async function init() {
   els.viewToggle.addEventListener("click", onToggleView);
   wireExportModal();
   wireImport();
+  wireCloudModal();
+  updateCloudChip();
 
   // Live-refresh when another context changes data: a bucket add/rename/delete
   // (changes.buckets) or a dump from the popup / context menu (changes.dumpSignal,
   // which the entry write can't announce on its own — IndexedDB has no
-  // cross-tab change event).
+  // cross-tab change event). Cloud state changes update the sync chip/modal.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.dumpSignal) {
@@ -77,6 +100,10 @@ async function init() {
       renderBucket();
     } else if (changes.buckets) {
       renderTabs();
+    }
+    if (changes.syncState || changes.gconnection) {
+      updateCloudChip();
+      if (!els.cloudModal.hidden) refreshCloudModal();
     }
   });
   // Fallback: a frozen/discarded tab may miss the event; re-fetch on refocus.
@@ -235,6 +262,7 @@ function renderCard(entry) {
   del.title = "Delete this entry";
   del.addEventListener("click", async () => {
     await deleteEntry(entry.id);
+    enqueueDelete(entry.id, entry.bucketId);
     currentEntries = currentEntries.filter((e) => e.id !== entry.id);
     renderTabs();
     renderView();
@@ -268,6 +296,7 @@ function wireDropTarget(col, status) {
     if (!entry || entry.status === status) return;
     entry.status = status;
     await updateEntry(id, { status });
+    enqueueUpsert(id);
     renderView(); // re-render board so cards + counts move
   });
 }
@@ -323,9 +352,10 @@ function renderRow(entry) {
 
   const notes = document.createElement("td");
   notes.appendChild(
-    makeEditable("textarea", entry.notes, "Add a note…", (val) =>
-      updateEntry(entry.id, { notes: val })
-    )
+    makeEditable("textarea", entry.notes, "Add a note…", async (val) => {
+      await updateEntry(entry.id, { notes: val });
+      enqueueUpsert(entry.id);
+    })
   );
 
   const actions = document.createElement("td");
@@ -335,6 +365,7 @@ function renderRow(entry) {
   del.title = "Delete this entry";
   del.addEventListener("click", async () => {
     await deleteEntry(entry.id);
+    enqueueDelete(entry.id, entry.bucketId);
     tr.remove();
     renderTabs();
     renderBucket();
@@ -370,6 +401,7 @@ function editContent(td, entry) {
     if (val && val !== entry.content) {
       entry.content = val;
       await updateEntry(entry.id, { content: val });
+      enqueueUpsert(entry.id);
     }
     renderContentView(td, entry);
   };
@@ -400,10 +432,11 @@ function renderStatusSelect(entry) {
   }
   sel.value = STATUSES.includes(entry.status) ? entry.status : DEFAULT_STATUS;
   sel.dataset.tone = statusTone(sel.value);
-  sel.addEventListener("change", () => {
+  sel.addEventListener("change", async () => {
     entry.status = sel.value;
     sel.dataset.tone = statusTone(sel.value);
-    updateEntry(entry.id, { status: sel.value });
+    await updateEntry(entry.id, { status: sel.value });
+    enqueueUpsert(entry.id);
   });
   return sel;
 }
@@ -489,6 +522,7 @@ async function onRename() {
   const name = prompt("Rename bucket:", bucket.name);
   if (!name || !name.trim()) return;
   await renameBucket(bucket.id, name.trim());
+  enqueueBucketOp("bucketRename", bucket.id, name.trim());
   await renderTabs();
   await renderBucket();
 }
@@ -503,6 +537,7 @@ async function onDelete() {
     : `Delete "${bucket.name}"?`;
   if (!confirm(msg)) return;
   await deleteBucket(bucket.id);
+  enqueueBucketOp("bucketDelete", bucket.id);
   activeBucketId = null;
   await renderTabs();
   await renderBucket();
@@ -692,6 +727,7 @@ async function parseXlsxImport(file) {
 async function mergeImport(byBucket) {
   let added = 0;
   let skipped = 0;
+  const addedIds = [];
   const buckets = await getBuckets();
   const byName = new Map(buckets.map((b) => [b.name.toLowerCase(), b]));
 
@@ -720,7 +756,9 @@ async function mergeImport(byBucket) {
     }
     await addEntries(toAdd);
     added += toAdd.length;
+    for (const e of toAdd) addedIds.push(e.id);
   }
+  await enqueueUpsertMany(addedIds); // sync imported dumps to the cloud
   return { added, skipped };
 }
 
@@ -746,6 +784,83 @@ function toIso(value) {
   if (!value) return new Date().toISOString();
   const d = new Date(value);
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+// ---- Cloud sync UI --------------------------------------------------------
+
+const SYNC_LABEL = { syncing: "Syncing…", synced: "Synced", error: "Sync error", idle: "Idle" };
+
+function wireCloudModal() {
+  els.cloudOpen.addEventListener("click", openCloudModal);
+  els.cloudCancel.addEventListener("click", closeCloudModal);
+  els.cloudDone.addEventListener("click", closeCloudModal);
+  els.cloudModal.addEventListener("click", (e) => {
+    if (e.target === els.cloudModal) closeCloudModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.cloudModal.hidden) closeCloudModal();
+  });
+  els.cloudConnect.addEventListener("click", onConnect);
+  els.cloudDisconnect.addEventListener("click", onDisconnect);
+}
+
+async function openCloudModal() {
+  await refreshCloudModal();
+  els.cloudModal.hidden = false;
+}
+function closeCloudModal() {
+  els.cloudModal.hidden = true;
+}
+
+async function refreshCloudModal() {
+  const conn = await getConnection();
+  els.cloudDisconnected.hidden = conn.connected;
+  els.cloudConnected.hidden = !conn.connected;
+  if (!conn.connected) return;
+  els.cloudEmail.textContent = conn.email || "your account";
+  const state = (await getSetting("syncState")) || "idle";
+  els.cloudStatusText.textContent = SYNC_LABEL[state] || "Idle";
+  els.cloudStatusDot.dataset.state = state;
+  const sid = await getSetting("sheetsSpreadsheetId");
+  els.cloudOpenSheet.hidden = !sid;
+  if (sid) els.cloudOpenSheet.href = `https://docs.google.com/spreadsheets/d/${sid}/edit`;
+}
+
+async function onConnect() {
+  els.cloudConnect.disabled = true;
+  els.cloudConnect.textContent = "Connecting…";
+  try {
+    const target = document.querySelector('input[name="cloud-target"]:checked')?.value || "sheets";
+    await setSetting("syncTarget", target);
+    await gConnect(); // interactive OAuth via chrome.identity
+    // Backfill: queue all existing dumps so current data lands in the sheet.
+    const all = await getAllEntries();
+    await enqueueUpsertMany(all.map((e) => e.id));
+    await refreshCloudModal();
+    updateCloudChip();
+    showToast("Connected — syncing your dumps ✓");
+  } catch (err) {
+    showToast(`Google connect failed: ${err.message || "cancelled"}`, true);
+  } finally {
+    els.cloudConnect.disabled = false;
+    els.cloudConnect.textContent = "Connect Google";
+  }
+}
+
+async function onDisconnect() {
+  await gDisconnect();
+  await refreshCloudModal();
+  updateCloudChip();
+  showToast("Disconnected from Google");
+}
+
+async function updateCloudChip() {
+  const conn = await getConnection();
+  const state = conn.connected ? (await getSetting("syncState")) || "idle" : "off";
+  els.cloudDot.dataset.state = state;
+  els.cloudOpen.title = conn.connected
+    ? `Cloud sync: ${SYNC_LABEL[state] || "connected"}`
+    : "Cloud sync: not connected";
 }
 
 let toastTimer = null;

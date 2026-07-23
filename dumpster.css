@@ -699,3 +699,58 @@ textarea.editable::placeholder {
   background: var(--danger);
   color: #fff;
 }
+
+/* ---- Cloud sync ---- */
+.cloud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+  flex: 0 0 auto;
+}
+.dot[data-state="synced"] {
+  background: var(--green);
+}
+.dot[data-state="syncing"] {
+  background: var(--amber);
+  animation: dot-pulse 1s ease-in-out infinite;
+}
+.dot[data-state="error"] {
+  background: var(--red);
+}
+@keyframes dot-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+.cloud-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cloud-sheet-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+.cloud-sheet-link:hover {
+  text-decoration: underline;
+}
+.check input[type="radio"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+.check.disabled {
+  opacity: 0.55;
+  cursor: default;
+}

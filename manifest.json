@@ -11,7 +11,7 @@
   ],
   "oauth2": {
     "//": "Replace client_id with your own OAuth 2.0 Client ID (type: Chrome Extension) from Google Cloud Console. See README > Google sync setup.",
-    "client_id": "REPLACE_WITH_YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "753913323279-qsob1eiaflkg8b8aq0pjlm688oi84df2.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/drive.file"]
   },
   "background": {

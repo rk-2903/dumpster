@@ -13,6 +13,9 @@
         <h1>Dumpster</h1>
       </div>
       <div class="header-actions">
+        <button id="cloud-open" class="btn cloud-btn" title="Cloud sync">
+          <span id="cloud-dot" class="dot"></span> Cloud
+        </button>
         <button id="import-open" class="btn">Import</button>
         <button id="export-open" class="btn">Export</button>
         <input id="import-file" type="file" accept=".json,.xlsx" hidden />
@@ -87,6 +90,48 @@
         <div class="modal-actions">
           <button type="button" id="export-cancel" class="btn subtle">Cancel</button>
           <button type="button" id="export-go" class="btn primary">Export</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cloud-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cloud-title">
+        <h3 id="cloud-title">Cloud sync</h3>
+
+        <div id="cloud-disconnected">
+          <p class="modal-hint">
+            Connect your Google account to mirror every dump into your own Google Sheet —
+            one tab per bucket, one row per dump. It stays in your Drive; nothing is sent
+            anywhere else.
+          </p>
+          <div class="modal-section">
+            <span class="modal-label">Sync to</span>
+            <label class="check">
+              <input type="radio" name="cloud-target" value="sheets" checked />
+              <span>Google Sheets</span>
+            </label>
+            <label class="check disabled">
+              <input type="radio" name="cloud-target" value="docs" disabled />
+              <span>Google Docs — coming soon</span>
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="cloud-cancel" class="btn subtle">Cancel</button>
+            <button type="button" id="cloud-connect" class="btn primary">Connect Google</button>
+          </div>
+        </div>
+
+        <div id="cloud-connected" hidden>
+          <p class="modal-hint">Connected as <b id="cloud-email"></b>.</p>
+          <div class="cloud-status-row">
+            <span id="cloud-status-dot" class="dot"></span>
+            <span id="cloud-status-text">Synced</span>
+          </div>
+          <p><a id="cloud-open-sheet" class="cloud-sheet-link" target="_blank" rel="noreferrer" hidden>Open Google Sheet ↗</a></p>
+          <div class="modal-actions">
+            <button type="button" id="cloud-disconnect" class="btn subtle danger">Disconnect</button>
+            <button type="button" id="cloud-done" class="btn primary">Done</button>
+          </div>
         </div>
       </div>
     </div>

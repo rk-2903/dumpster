@@ -43,6 +43,16 @@ export async function enqueueUpsert(entryId) {
   kick();
 }
 
+// Bulk upsert (backfill on connect, or import) — one storage write for many ids.
+export async function enqueueUpsertMany(entryIds) {
+  if (!entryIds.length || !(await connected())) return;
+  const wanted = new Set(entryIds);
+  const ops = (await get()).filter((o) => !(wanted.has(o.entryId) && (o.kind === "upsert" || o.kind === "delete")));
+  for (const id of wanted) ops.push({ opId: crypto.randomUUID(), kind: "upsert", entryId: id });
+  await set(ops);
+  kick();
+}
+
 // An entry was deleted. bucketId is kept because the entry is gone from IndexedDB
 // and the provider still needs to know which sheet/tab to remove the row from.
 export async function enqueueDelete(entryId, bucketId) {
