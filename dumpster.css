@@ -42,6 +42,12 @@
   box-sizing: border-box;
 }
 
+/* The [hidden] attribute must win over component display rules
+   (e.g. .board { display: grid }, .modal-backdrop { display: flex }). */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -340,41 +346,48 @@ textarea.editable::placeholder {
   opacity: 0.7;
 }
 
-/* Status renders as a colored pill whose tone is inferred from its text. */
-.status-input {
-  width: auto;
+/* Status is a three-state <select> rendered as a colored pill. */
+.status-select {
+  appearance: none;
+  font: inherit;
   font-weight: 600;
   font-size: 12.5px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  padding: 5px 11px;
+  padding: 5px 24px 5px 11px;
+  cursor: pointer;
+  color: var(--tone, var(--muted));
+  background-color: color-mix(in srgb, var(--tone) 14%, transparent);
+  background-image: linear-gradient(45deg, transparent 50%, var(--tone) 50%),
+    linear-gradient(135deg, var(--tone) 50%, transparent 50%);
+  background-position: right 12px center, right 8px center;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
 }
-.status-input[data-tone="empty"] {
-  font-weight: 500;
-  color: var(--muted);
-}
-.status-input[data-tone="green"] {
+.status-select[data-tone="green"] {
   --tone: var(--green);
 }
-.status-input[data-tone="amber"] {
+.status-select[data-tone="amber"] {
   --tone: var(--amber);
 }
-.status-input[data-tone="red"] {
-  --tone: var(--red);
-}
-.status-input[data-tone="blue"] {
+.status-select[data-tone="blue"] {
   --tone: var(--blue);
 }
-.status-input:not([data-tone="empty"]) {
-  color: var(--tone);
-  background: color-mix(in srgb, var(--tone) 14%, transparent);
-  border-color: transparent;
-}
-.status-input:not([data-tone="empty"]):hover {
+.status-select:hover {
   border-color: color-mix(in srgb, var(--tone) 45%, transparent);
 }
-.status-input:focus {
+.status-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 22%, transparent);
+}
+.status-select option {
   color: var(--text);
   background: var(--bg);
+  font-weight: 500;
+}
+
+.content-edit {
+  min-height: 40px;
 }
 
 .row-delete {
@@ -409,4 +422,280 @@ textarea.editable::placeholder {
 }
 .empty b {
   color: var(--text);
+}
+
+/* ---- Export modal ---- */
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04150f;
+}
+.btn.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, black);
+  color: #04150f;
+}
+.btn.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 20, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+.modal {
+  width: 400px;
+  max-width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  padding: 20px 22px 18px;
+}
+.modal h3 {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 650;
+}
+.modal-section {
+  margin-bottom: 18px;
+}
+.modal-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.modal-hint {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.seg {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 550;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.seg:hover {
+  color: var(--text);
+}
+.seg.active {
+  background: var(--bg);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.check:hover {
+  background: var(--row-hover);
+}
+.check input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+.check-all {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  margin-bottom: 4px;
+  padding-bottom: 9px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---- View toggle (List / Board) ---- */
+.view-toggle {
+  flex: 0 0 auto;
+}
+.view-toggle .seg {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* ---- Board (Kanban) ---- */
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.board-col {
+  --tone: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--tone);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 120px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.board-col[data-tone="amber"] {
+  --tone: var(--amber);
+}
+.board-col[data-tone="blue"] {
+  --tone: var(--blue);
+}
+.board-col[data-tone="green"] {
+  --tone: var(--green);
+}
+.board-col.drop-over {
+  background: color-mix(in srgb, var(--tone) 9%, var(--panel));
+  border-color: var(--tone);
+}
+.board-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding: 0 2px;
+}
+.board-col-title {
+  font-weight: 650;
+  font-size: 13px;
+  color: var(--tone);
+}
+.board-col-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 15%, transparent);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.board-col-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-height: 40px;
+}
+
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 11px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  cursor: grab;
+}
+.card:active {
+  cursor: grabbing;
+}
+.card.dragging {
+  opacity: 0.45;
+}
+.card-content {
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.card-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.card-content a:hover {
+  text-decoration: underline;
+}
+.card-source {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-source:hover {
+  color: var(--accent);
+}
+.card-notes {
+  margin-top: 7px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--chip);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 9px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.card-foot .row-delete {
+  opacity: 0;
+  font-size: 13px;
+}
+.card:hover .card-foot .row-delete {
+  opacity: 1;
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #04150f;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 22px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+  z-index: 60;
+}
+.toast.toast-error {
+  background: var(--danger);
+  color: #fff;
 }

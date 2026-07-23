@@ -13,8 +13,9 @@
         <h1>Dumpster</h1>
       </div>
       <div class="header-actions">
-        <button id="export-csv" class="btn">Export CSV</button>
-        <button id="export-json" class="btn">Export JSON</button>
+        <button id="import-open" class="btn">Import</button>
+        <button id="export-open" class="btn">Export</button>
+        <input id="import-file" type="file" accept=".json,.xlsx" hidden />
       </div>
     </header>
 
@@ -27,6 +28,10 @@
           <span id="entry-count" class="count"></span>
         </div>
         <div class="bucket-tools">
+          <div class="segmented view-toggle" id="view-toggle">
+            <button type="button" class="seg active" data-view="list">List</button>
+            <button type="button" class="seg" data-view="board">Board</button>
+          </div>
           <div class="search-wrap">
             <span class="search-icon" aria-hidden="true"></span>
             <input id="search" class="search" type="search" placeholder="Filter this bucket…" />
@@ -36,7 +41,7 @@
         </div>
       </div>
 
-      <div class="table-wrap">
+      <div class="table-wrap" id="list-view">
         <table id="entries" class="entries">
           <thead>
             <tr>
@@ -54,7 +59,39 @@
           Nothing here yet. Right-click a page → <b>Dump to</b>, or use the toolbar popup.
         </div>
       </div>
+
+      <div class="board" id="board-view" hidden></div>
     </main>
+
+    <div id="export-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="export-title">
+        <h3 id="export-title">Export</h3>
+
+        <div class="modal-section">
+          <span class="modal-label">Format</span>
+          <div class="segmented" id="export-format">
+            <button type="button" class="seg active" data-format="xlsx">Excel (.xlsx)</button>
+            <button type="button" class="seg" data-format="json">JSON</button>
+          </div>
+          <p class="modal-hint" id="format-hint">One sheet per bucket.</p>
+        </div>
+
+        <div class="modal-section">
+          <span class="modal-label">Buckets</span>
+          <label class="check check-all">
+            <input type="checkbox" id="export-all" /> <span>All buckets</span>
+          </label>
+          <div id="export-buckets" class="check-list"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="export-cancel" class="btn subtle">Cancel</button>
+          <button type="button" id="export-go" class="btn primary">Export</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script type="module" src="dumpster.js"></script>
   </body>

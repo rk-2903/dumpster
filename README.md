@@ -16,9 +16,16 @@ you meant to come back to.
   and title it came from, so even a bare note remembers where you were.
 - **Append-only** — dumps only ever add rows; nothing is overwritten.
 - **Review table** (the "View all" page / extension options): one tab per bucket,
-  one row per dump, with **Status** and **Notes** you fill in later (e.g.
-  `Need referral` → `DM sent` → `Applied`). Content links are clickable.
-- **Export** any bucket to **CSV** or **JSON**.
+  one row per dump. Each dump has a **Status** (`To Do` → `In Process` → `Done`)
+  and free-text **Notes**; the dumped text itself is editable (double-click).
+  Content links are clickable.
+- **Export** — pick any buckets (or all) and export to **Excel** (one sheet per
+  bucket) or **JSON** (each bucket a key holding its dumps).
+- **Import** — load an **Excel** or **JSON** file back in. Dumps append into
+  buckets matched by name (missing buckets are created); rows that already exist
+  (same content + timestamp) are skipped, so re-importing the same file is safe.
+- **List or Board** — view a bucket as a table or a **Kanban board** (To Do /
+  In Process / Done); drag a card between columns to change its status.
 
 Data lives in the browser (IndexedDB + `chrome.storage.local`). Nothing leaves
 your machine. Cross-device sync (e.g. to a Google Sheet) is a deliberate Phase-2
@@ -54,3 +61,8 @@ Reload the extension from that page after any code change.
 - **Per-bucket typed fields** — let a bucket define its own columns instead of the
   shared Status/Notes pair.
 - **Keyboard-shortcut quick-capture** bar as a third, fastest entry point.
+
+## Third-party
+
+- **SheetJS (xlsx)** — vendored at `vendor/xlsx.mjs`, loaded lazily only when you
+  export/import Excel. Licensed **Apache-2.0** (`vendor/SHEETJS-LICENSE.txt`).
