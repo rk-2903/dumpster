@@ -7,6 +7,7 @@ import {
   signalDump,
 } from "./src/buckets.js";
 import { addEntries, makeEntry } from "./src/db.js";
+import { enqueueUpsertMany } from "./src/outbox.js";
 
 const els = {
   bucket: document.getElementById("bucket"),
@@ -142,6 +143,7 @@ async function onSubmit() {
   await addEntries(entries);
   await setLastBucketId(bucketId);
   await signalDump(); // tell any open viewer tab to refresh live
+  await enqueueUpsertMany(entries.map((e) => e.id)); // queue for cloud sync
 
   staged = [];
   els.content.value = "";
