@@ -43,6 +43,7 @@ const els = {
   viewToggle: document.getElementById("view-toggle"),
   listView: document.getElementById("list-view"),
   board: document.getElementById("board-view"),
+  docView: document.getElementById("doc-view"),
   // Export modal
   exportOpen: document.getElementById("export-open"),
   exportModal: document.getElementById("export-modal"),
@@ -75,13 +76,17 @@ const els = {
 let activeBucketId = null;
 let activeBucketKind = "sheet"; // doc buckets have no status/board
 let currentEntries = []; // entries for the active bucket (unfiltered)
-let currentView = "list"; // "list" | "board"
+let currentView = "list"; // "list" | "board" | "document"
+// Remembered view per bucket kind (doc buckets default to the Document preview).
+let viewPref = { sheet: "list", doc: "document" };
+const VIEW_LABELS = { document: "Document", list: "List", board: "Board" };
+const kindViews = (kind) => (kind === "doc" ? ["document", "list"] : ["list", "board"]);
 
 async function init() {
   await ensureSeeded();
   await migrateStatuses();
-  currentView = (await getSetting("viewMode")) === "board" ? "board" : "list";
-  syncViewToggle();
+  const savedPref = await getSetting("viewPref");
+  if (savedPref) viewPref = { ...viewPref, ...savedPref };
   activeBucketId = await getLastBucketId();
   await renderTabs();
   await renderBucket();
@@ -167,11 +172,26 @@ async function renderBucket() {
   els.bucketName.textContent = bucket ? bucket.name : "—";
   activeBucketKind = bucket?.kind === "doc" ? "doc" : "sheet";
   await renderBucketOpenLink(bucket);
-  // Doc buckets are documentation: no workflow status, so no Board view either.
-  els.viewToggle.hidden = activeBucketKind === "doc";
   els.table.classList.toggle("no-status", activeBucketKind === "doc");
+  // Doc buckets: Document | List. Sheet buckets: List | Board.
+  const views = kindViews(activeBucketKind);
+  currentView = views.includes(viewPref[activeBucketKind]) ? viewPref[activeBucketKind] : views[0];
+  renderViewToggle(activeBucketKind);
+  els.viewToggle.hidden = false;
   currentEntries = bucket ? await getEntriesByBucket(bucket.id) : [];
   renderView();
+}
+
+function renderViewToggle(kind) {
+  els.viewToggle.innerHTML = "";
+  for (const v of kindViews(kind)) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "seg" + (v === currentView ? " active" : "");
+    btn.dataset.view = v;
+    btn.textContent = VIEW_LABELS[v];
+    els.viewToggle.appendChild(btn);
+  }
 }
 
 // "Open doc ↗" / "Open sheet ↗" next to the bucket heading — links straight to
@@ -228,11 +248,138 @@ function updateCount(shown) {
 function renderView() {
   const entries = visibleEntries();
   updateCount(entries.length);
-  const board = currentView === "board" && activeBucketKind !== "doc";
-  els.listView.hidden = board;
-  els.board.hidden = !board;
-  if (board) renderBoard(entries);
+  els.listView.hidden = currentView !== "list";
+  els.board.hidden = currentView !== "board";
+  els.docView.hidden = currentView !== "document";
+  if (currentView === "board") renderBoard(entries);
+  else if (currentView === "document") renderDocument(entries);
   else renderList(entries);
+}
+
+// ---- Document view (read-only rendered preview of the Doc bucket) ----
+
+function formatDocDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? "Undated"
+    : d.toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" });
+}
+
+function docContentInto(container, entry) {
+  if (entry.hasImage) {
+    const img = document.createElement("img");
+    img.className = "doc-img";
+    img.alt = "Screenshot";
+    img.title = "Click to view full size";
+    getImage(entry.id).then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      thumbUrls.add(url);
+      img.src = url;
+    });
+    img.addEventListener("click", () => openLightbox(entry.id));
+    container.appendChild(img);
+  }
+  container.appendChild(linkify(entry.content));
+}
+
+function uniqueRefs(entries) {
+  const seen = new Set();
+  const out = [];
+  for (const e of entries) {
+    const key = (e.sourceUrl || e.sourceTitle || "").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ url: e.sourceUrl || "", title: e.sourceTitle || "" });
+  }
+  return out;
+}
+
+function renderDocument(entries) {
+  revokeThumbs();
+  els.docView.innerHTML = "";
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.innerHTML = "Nothing here yet. Dump text or screenshots into this Doc bucket.";
+    els.docView.appendChild(empty);
+    return;
+  }
+
+  const ordered = [...entries].sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1));
+  const article = document.createElement("article");
+  article.className = "doc-article";
+
+  let lastDate = null;
+  let listEl = null; // open <ul> collecting consecutive list items
+  for (const entry of ordered) {
+    const date = formatDocDate(entry.createdAt);
+    if (date !== lastDate) {
+      lastDate = date;
+      listEl = null;
+      const h = document.createElement("div");
+      h.className = "doc-date";
+      h.textContent = date;
+      article.appendChild(h);
+    }
+
+    if (entry.format === "list") {
+      if (!listEl) {
+        listEl = document.createElement("ul");
+        listEl.className = "doc-list";
+        article.appendChild(listEl);
+      }
+      const li = document.createElement("li");
+      docContentInto(li, entry);
+      if (entry.notes) {
+        const n = document.createElement("span");
+        n.className = "doc-notes";
+        n.textContent = `  ${entry.notes}`;
+        li.appendChild(n);
+      }
+      listEl.appendChild(li);
+      continue;
+    }
+
+    listEl = null;
+    const tag = entry.format === "h1" ? "h1" : entry.format === "h2" ? "h2" : "p";
+    const node = document.createElement(tag);
+    node.className = "doc-block";
+    docContentInto(node, entry);
+    article.appendChild(node);
+    if (entry.notes) {
+      const n = document.createElement("p");
+      n.className = "doc-notes";
+      n.textContent = entry.notes;
+      article.appendChild(n);
+    }
+  }
+
+  const refs = uniqueRefs(ordered);
+  if (refs.length) {
+    const h = document.createElement("div");
+    h.className = "doc-date doc-refs-head";
+    h.textContent = "References";
+    article.appendChild(h);
+    const ul = document.createElement("ul");
+    ul.className = "doc-refs";
+    for (const ref of refs) {
+      const li = document.createElement("li");
+      if (ref.url) {
+        const a = document.createElement("a");
+        a.href = ref.url;
+        a.target = "_blank";
+        a.rel = "noreferrer";
+        a.textContent = ref.title || ref.url;
+        li.appendChild(a);
+      } else {
+        li.textContent = ref.title;
+      }
+      ul.appendChild(li);
+    }
+    article.appendChild(ul);
+  }
+  els.docView.appendChild(article);
 }
 
 function renderList(entries) {
@@ -360,15 +507,10 @@ function onToggleView(e) {
   const btn = e.target.closest(".seg");
   if (!btn || btn.dataset.view === currentView) return;
   currentView = btn.dataset.view;
-  setSetting("viewMode", currentView);
-  syncViewToggle();
+  viewPref[activeBucketKind] = currentView;
+  setSetting("viewPref", viewPref);
+  renderViewToggle(activeBucketKind);
   renderView();
-}
-
-function syncViewToggle() {
-  [...els.viewToggle.children].forEach((s) =>
-    s.classList.toggle("active", s.dataset.view === currentView)
-  );
 }
 
 function getSetting(key) {

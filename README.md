@@ -10,8 +10,10 @@ you meant to come back to.
   - **Sheet buckets** — trackers. Each dump has a **Status**
     (`To Do` → `In Process` → `Done`) and **Notes**; view as a table or a
     **Kanban board** and drag cards between columns to change status.
-  - **Doc buckets** — documentation. No workflow status, just the content with
-    source and notes.
+  - **Doc buckets** — documentation. No workflow status. In the viewer they
+    default to a **Document** view (toggle to List to edit): entries render as a
+    flowing document — date sections, H1/H2/list/paragraph, inline screenshots,
+    and a **References** section at the bottom listing the unique source links.
 - **Three ways to dump:**
   - **Popup** (toolbar icon): pick a bucket (grouped Sheets/Docs), paste,
     optionally *Add another* to stack several, then *Dump*.
