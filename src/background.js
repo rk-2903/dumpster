@@ -2,9 +2,11 @@
 // menu in sync with the bucket list, and handles reflex dumps from that menu.
 
 import { getBuckets, ensureSeeded, addBucket, setLastBucketId, signalDump } from "./buckets.js";
-import { addEntry, makeEntry } from "./db.js";
+import { addEntry, makeEntry, putImage } from "./db.js";
 import { enqueueUpsert } from "./outbox.js";
 import { drain } from "./sync.js";
+import { captureVisible, cropBlob } from "./capture.js";
+import { regionSelectOverlay } from "./regionSelect.js";
 
 const PARENT_ID = "dumpster-parent";
 const CONTEXTS = ["selection", "link", "page", "image"];
@@ -56,6 +58,17 @@ async function doRebuildMenus() {
       contexts: CONTEXTS,
     });
   }
+
+  // Screenshots land in Doc buckets: each bucket offers visible-area or
+  // drag-a-region capture.
+  createItem({ id: "shot-parent", title: "Screenshot to", contexts: CONTEXTS });
+  for (const bucket of buckets.filter((b) => b.kind === "doc")) {
+    const bid = `shotb:${bucket.id}`;
+    createItem({ id: bid, parentId: "shot-parent", title: bucket.name, contexts: CONTEXTS });
+    createItem({ id: `shot:vis:${bucket.id}`, parentId: bid, title: "Visible area", contexts: CONTEXTS });
+    createItem({ id: `shot:reg:${bucket.id}`, parentId: bid, title: "Select region", contexts: CONTEXTS });
+  }
+  createItem({ id: "shotnew", parentId: "shot-parent", title: "＋ New Doc bucket…", contexts: CONTEXTS });
 }
 
 // Choose what to dump based on what was right-clicked, preferring the most
@@ -67,8 +80,76 @@ function contentFromClick(info) {
   return info.pageUrl || "";
 }
 
+// Capture (optionally cropped), store locally, and queue for sync.
+async function saveScreenshot(bucketId, tab, rect) {
+  const blob = await captureVisible(tab?.windowId);
+  const final = rect ? await cropBlob(blob, rect, rect.dpr || 1) : blob;
+  const entry = makeEntry({
+    bucketId,
+    content: tab?.title ? `Screenshot — ${tab.title}` : "Screenshot",
+    sourceUrl: tab?.url || "",
+    sourceTitle: tab?.title || "",
+  });
+  entry.hasImage = true;
+  await putImage(entry.id, final);
+  await addEntry(entry);
+  await setLastBucketId(bucketId);
+  await signalDump();
+  await enqueueUpsert(entry.id);
+  flashBadge();
+}
+
+function flashBadgeError() {
+  chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
+  chrome.action.setBadgeText({ text: "✕" });
+  setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
+}
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const id = String(info.menuItemId);
+
+  // Screenshot to an existing Doc bucket: "shot:<vis|reg>:<bucketId>".
+  if (id.startsWith("shot:")) {
+    const [, mode, bucketId] = id.split(":");
+    try {
+      let rect = null;
+      if (mode === "reg") {
+        const [res] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: regionSelectOverlay,
+        });
+        rect = res?.result;
+        if (!rect) return; // cancelled
+        await new Promise((r) => setTimeout(r, 80)); // let the overlay's removal paint
+      }
+      await saveScreenshot(bucketId, tab, rect);
+    } catch (err) {
+      console.warn("[dumpster] screenshot failed:", err.message);
+      flashBadgeError();
+    }
+    return;
+  }
+
+  // Screenshot into a brand-new Doc bucket (named via in-page prompt).
+  if (id === "shotnew") {
+    try {
+      const [res] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (label) => window.prompt(label),
+        args: ["Name your new Doc bucket:"],
+      });
+      const name = res?.result;
+      if (!name || !name.trim()) return;
+      const bucket = await addBucket(name.trim(), "doc");
+      await saveScreenshot(bucket.id, tab, null);
+    } catch (err) {
+      // Page doesn't allow injection (chrome://, Web Store) → capture can't
+      // work there either; signal failure instead of opening a naming window.
+      console.warn("[dumpster] screenshot new-bucket failed:", err.message);
+      flashBadgeError();
+    }
+    return;
+  }
 
   // "New bucket…": ask for the name right on the page via an injected native
   // prompt (activeTab is granted by the menu click). Falls back to a small
