@@ -60,7 +60,7 @@ const els = {
   cloudEmail: document.getElementById("cloud-email"),
   cloudStatusDot: document.getElementById("cloud-status-dot"),
   cloudStatusText: document.getElementById("cloud-status-text"),
-  cloudOpenSheet: document.getElementById("cloud-open-sheet"),
+  cloudLinks: document.getElementById("cloud-links"),
   cloudCancel: document.getElementById("cloud-cancel"),
   cloudConnect: document.getElementById("cloud-connect"),
   cloudDisconnect: document.getElementById("cloud-disconnect"),
@@ -802,6 +802,9 @@ function wireCloudModal() {
   });
   els.cloudConnect.addEventListener("click", onConnect);
   els.cloudDisconnect.addEventListener("click", onDisconnect);
+  document
+    .querySelectorAll('input[name="cloud-target-connected"]')
+    .forEach((rb) => rb.addEventListener("change", () => onSwitchTarget(rb.value)));
 }
 
 async function openCloudModal() {
@@ -826,9 +829,67 @@ async function refreshCloudModal() {
   }
   els.cloudStatusText.textContent = label;
   els.cloudStatusDot.dataset.state = state;
-  const sid = await getSetting("sheetsSpreadsheetId");
-  els.cloudOpenSheet.hidden = !sid;
-  if (sid) els.cloudOpenSheet.href = `https://docs.google.com/spreadsheets/d/${sid}/edit`;
+
+  const target = (await getSetting("syncTarget")) || "sheets";
+  document
+    .querySelectorAll('input[name="cloud-target-connected"]')
+    .forEach((rb) => (rb.checked = rb.value === target));
+  await renderCloudLinks(target);
+}
+
+// Links to the synced artifacts: the spreadsheet, or each bucket's doc.
+async function renderCloudLinks(target) {
+  els.cloudLinks.innerHTML = "";
+  const mkLink = (href, text) => {
+    const a = document.createElement("a");
+    a.className = "cloud-sheet-link";
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    a.href = href;
+    a.textContent = text;
+    els.cloudLinks.appendChild(a);
+  };
+  if (target === "docs") {
+    const map = (await getSetting("docsDocMap")) || {};
+    const buckets = await getBuckets();
+    for (const b of buckets) {
+      const d = map[b.id];
+      if (d) mkLink(`https://docs.google.com/document/d/${d.docId}/edit`, `Open “${b.name}” doc ↗`);
+    }
+    if (!els.cloudLinks.children.length) {
+      const span = document.createElement("span");
+      span.className = "cloud-links-empty";
+      span.textContent = "Docs are created as dumps sync.";
+      els.cloudLinks.appendChild(span);
+    }
+  } else {
+    const sid = await getSetting("sheetsSpreadsheetId");
+    if (sid) mkLink(`https://docs.google.com/spreadsheets/d/${sid}/edit`, "Open Google Sheet ↗");
+  }
+}
+
+// Switching targets redirects future syncs; offer to copy existing data too
+// (providers upsert by entry id, so the copy is idempotent).
+async function onSwitchTarget(target) {
+  const prev = (await getSetting("syncTarget")) || "sheets";
+  if (target === prev) return;
+  await setSetting("syncTarget", target);
+  const label = target === "docs" ? "Google Docs" : "Google Sheets";
+  if (confirm(`Future dumps will sync to ${label}. Also copy everything already in Dumpster there now?`)) {
+    await backfillAll();
+    showToast(`Copying everything to ${label}…`);
+  } else {
+    showToast(`Future dumps will sync to ${label}`);
+  }
+  await refreshCloudModal();
+}
+
+// Queue every entry, oldest first so the Docs provider's date grouping and the
+// Sheet's row order both come out chronological.
+async function backfillAll() {
+  const all = await getAllEntries();
+  all.sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1));
+  await enqueueUpsertMany(all.map((e) => e.id));
 }
 
 async function onConnect() {
@@ -838,9 +899,8 @@ async function onConnect() {
     const target = document.querySelector('input[name="cloud-target"]:checked')?.value || "sheets";
     await setSetting("syncTarget", target);
     await gConnect(); // interactive OAuth via chrome.identity
-    // Backfill: queue all existing dumps so current data lands in the sheet.
-    const all = await getAllEntries();
-    await enqueueUpsertMany(all.map((e) => e.id));
+    // Backfill: queue all existing dumps so current data lands in the target.
+    await backfillAll();
     await refreshCloudModal();
     updateCloudChip();
     showToast("Connected — syncing your dumps ✓");

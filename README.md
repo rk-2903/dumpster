@@ -54,10 +54,19 @@ Reload the extension from that page after any code change.
 
 ## Google sync (setup — in progress)
 
-Cloud sync mirrors your dumps into your **own** Google Drive: one "Dumpster"
-spreadsheet, a tab per bucket, a row per dump. Local IndexedDB stays the source of
-truth; syncing is a background, non-blocking push so capture stays instant. Uses the
-narrow `drive.file` scope (only files the app creates) via `chrome.identity`.
+Cloud sync mirrors your dumps into your **own** Google Drive. Two targets, chosen at
+connect and switchable anytime from the Cloud modal (switching offers to copy
+existing dumps over — safe to repeat, upserts are keyed by entry id):
+
+- **Google Sheets** (default) — one "Dumpster" spreadsheet, a tab per bucket, a row
+  per dump.
+- **Google Docs** — one doc per bucket ("Dumpster — <bucket>"), entries grouped
+  under date headings; each entry is a content line plus a status · source · notes
+  meta line. Edits/deletes are located via Docs named ranges keyed by entry id.
+
+Local IndexedDB stays the source of truth; syncing is a background, non-blocking
+push so capture stays instant. Uses the narrow `drive.file` scope (only files the
+app creates) via `chrome.identity`.
 
 **One-time developer setup** (needed before the Connect button can authenticate):
 
@@ -65,9 +74,10 @@ narrow `drive.file` scope (only files the app creates) via `chrome.identity`.
    (`chrome://extensions` → pack, or generate a key pair). The OAuth client is bound
    to this ID.
 2. In the [Google Cloud Console](https://console.cloud.google.com/): create a project
-   → **APIs & Services → Enabled APIs**: enable **Google Sheets API** → **OAuth
-   consent screen** (External; add yourself as a test user) → **Credentials → Create
-   OAuth client ID → type: Chrome Extension**, with your pinned extension ID.
+   → **APIs & Services → Enabled APIs**: enable **Google Sheets API**, and for the
+   Docs target also **Google Docs API** + **Google Drive API** (doc rename/trash) →
+   **OAuth consent screen** (External; add yourself as a test user) → **Credentials →
+   Create OAuth client ID → type: Chrome Extension**, with your pinned extension ID.
 3. Put the client ID into `manifest.json`'s `oauth2.client_id` (replacing
    `REPLACE_WITH_YOUR_CLIENT_ID...`).
 
@@ -92,8 +102,8 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 
 ## Roadmap (Phase 2)
 
-- **Docs sync target** — a switchable second provider with inline screenshots
-  (`insertInlineImage`) and Drive OCR, alongside the Sheets target.
+- **Screenshots + OCR in the Docs target** — inline screenshots
+  (`insertInlineImage`) and Drive OCR on top of the shipped Docs provider.
 - **AI assistance** — surface time-sensitive dumps (e.g. "follow up on this
   referral") and suggest the right bucket at capture time.
 - **Per-bucket typed fields** — let a bucket define its own columns instead of the

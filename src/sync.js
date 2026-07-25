@@ -8,9 +8,10 @@ import { getEntry } from "./db.js";
 import { getBuckets } from "./buckets.js";
 import { getConnection, getToken } from "./googleAuth.js";
 import { createSheetsProvider } from "./sheetsSync.js";
+import { createDocsProvider } from "./docsSync.js";
 
 function providerFor(target, deps = {}) {
-  if (target === "docs") return null; // DocsProvider — coming soon
+  if (target === "docs") return createDocsProvider({ getToken, ...deps });
   return createSheetsProvider({ getToken, ...deps }); // default: sheets
 }
 
