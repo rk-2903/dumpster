@@ -18,9 +18,12 @@ const chromeStore = {
   set: (key, value) => new Promise((r) => chrome.storage.local.set({ [key]: value }, r)),
 };
 
-export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, store = chromeStore } = {}) {
+// getImage(entryId) → { blob, width?, height? } | null — injected so the provider
+// can fetch screenshot blobs (from IndexedDB in production, fixtures in tests).
+export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, store = chromeStore, getImage } = {}) {
   const MAP_KEY = "docsDocMap"; // { [bucketId]: { docId, title, lastDate } }
   const TITLE_RANGE = "__dumpster_title__"; // named range over the in-doc title
+  const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 
   async function api(method, url, body) {
     const token = await getToken(false);
@@ -40,6 +43,48 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
 
   async function getMap() {
     return (await store.get(MAP_KEY)) || {};
+  }
+
+  // The Docs API fetches image URIs server-side without auth, so a private
+  // Drive file won't work. Pattern: upload the PNG, make it link-visible for a
+  // few seconds, insert (Docs copies the bytes into the document), then delete
+  // the temp file. The local blob stays the source of truth.
+  async function uploadTempImage(blob) {
+    const token = await getToken(false);
+    const res = await fetchImpl(`${DRIVE_UPLOAD}?uploadType=media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": blob.type || "image/png" },
+      body: blob,
+    });
+    if (!res.ok) throw new Error(`Drive upload ${res.status}`);
+    const { id } = await res.json();
+    await api("POST", `https://www.googleapis.com/drive/v3/files/${id}/permissions`, {
+      type: "anyone",
+      role: "reader",
+    });
+    return id;
+  }
+
+  function deleteTempImage(id) {
+    return api("DELETE", `https://www.googleapis.com/drive/v3/files/${id}`).catch(() => {});
+  }
+
+  // Inline image sized to fit the doc column (px → pt at 0.75, capped 460pt).
+  function imageRequest(atIndex, fileId, dims) {
+    const req = {
+      insertInlineImage: {
+        location: { index: atIndex },
+        uri: `https://drive.google.com/uc?export=view&id=${fileId}`,
+      },
+    };
+    const maxPt = 460;
+    if (dims?.width) {
+      const pt = Math.min(maxPt, Math.round(dims.width * 0.75));
+      req.insertInlineImage.objectSize = { width: { magnitude: pt, unit: "PT" } };
+    } else {
+      req.insertInlineImage.objectSize = { width: { magnitude: maxPt, unit: "PT" } };
+    }
+    return req;
   }
 
   async function ensureBucketDoc(bucketId, bucketName) {
@@ -165,51 +210,70 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const block = buildBlock(entry);
     const existing = rangeOf(doc, entry.id);
 
-    if (existing) {
-      // Replace the block in place (stays in its original date section).
-      const { start, end } = existing;
-      await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, {
-        requests: [
-          { deleteNamedRange: { name: entry.id } },
-          { deleteContentRange: { range: r(start, end) } },
-          { insertText: { location: { index: start }, text: block.text } },
-          ...styleRequests(entry, block, start),
-          { createNamedRange: { name: entry.id, range: r(start, start + block.text.length) } },
-        ],
-      });
-      return;
+    // Screenshot entries: stage a temp public Drive copy for Docs to ingest.
+    let img = null;
+    let tempFileId = null;
+    if (entry.hasImage && getImage) {
+      img = await getImage(entry.id);
+      if (img?.blob) tempFileId = await uploadTempImage(img.blob);
     }
+    // The image occupies one index unit at the end of the block (its own line).
+    const blockLen = block.text.length + (tempFileId ? 1 : 0);
+    const imageReqs = (blockStart) =>
+      tempFileId ? [imageRequest(blockStart + block.text.length - 1, tempFileId, img)] : [];
 
-    // Append at the end; add a date heading when the day changes.
-    const content = doc.body?.content || [];
-    const insertAt = Math.max(1, (content[content.length - 1]?.endIndex || 2) - 1);
-    const heading = dateLabel(entry.createdAt);
-    const needHeading = tab.lastDate !== heading;
-    const headingText = needHeading ? `${heading}\n` : "";
-    const blockStart = insertAt + headingText.length;
-
-    const requests = [{ insertText: { location: { index: insertAt }, text: headingText + block.text } }];
-    if (needHeading) {
-      requests.push({
-        updateParagraphStyle: {
-          range: r(insertAt, insertAt + headingText.length),
-          paragraphStyle: { namedStyleType: "HEADING_2" },
-          fields: "namedStyleType",
-        },
-      });
-    }
-    requests.push(...styleRequests(entry, block, blockStart));
-    requests.push({
-      createNamedRange: { name: entry.id, range: r(blockStart, blockStart + block.text.length) },
-    });
-    await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, { requests });
-
-    if (needHeading) {
-      const map = await getMap();
-      if (map[entry.bucketId]) {
-        map[entry.bucketId].lastDate = heading;
-        await store.set(MAP_KEY, map);
+    try {
+      if (existing) {
+        // Replace the block in place (stays in its original date section).
+        const { start, end } = existing;
+        await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, {
+          requests: [
+            { deleteNamedRange: { name: entry.id } },
+            { deleteContentRange: { range: r(start, end) } },
+            { insertText: { location: { index: start }, text: block.text } },
+            ...styleRequests(entry, block, start),
+            ...imageReqs(start),
+            { createNamedRange: { name: entry.id, range: r(start, start + blockLen) } },
+          ],
+        });
+        return;
       }
+
+      // Append at the end; add a date heading when the day changes.
+      const content = doc.body?.content || [];
+      const insertAt = Math.max(1, (content[content.length - 1]?.endIndex || 2) - 1);
+      const heading = dateLabel(entry.createdAt);
+      const needHeading = tab.lastDate !== heading;
+      const headingText = needHeading ? `${heading}\n` : "";
+      const blockStart = insertAt + headingText.length;
+
+      const requests = [{ insertText: { location: { index: insertAt }, text: headingText + block.text } }];
+      if (needHeading) {
+        requests.push({
+          updateParagraphStyle: {
+            range: r(insertAt, insertAt + headingText.length),
+            paragraphStyle: { namedStyleType: "HEADING_2" },
+            fields: "namedStyleType",
+          },
+        });
+      }
+      requests.push(...styleRequests(entry, block, blockStart));
+      requests.push(...imageReqs(blockStart));
+      requests.push({
+        createNamedRange: { name: entry.id, range: r(blockStart, blockStart + blockLen) },
+      });
+      await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, { requests });
+
+      if (needHeading) {
+        const map = await getMap();
+        if (map[entry.bucketId]) {
+          map[entry.bucketId].lastDate = heading;
+          await store.set(MAP_KEY, map);
+        }
+      }
+    } finally {
+      // Docs copied the bytes at insert time; remove the temp file either way.
+      if (tempFileId) await deleteTempImage(tempFileId);
     }
   }
 

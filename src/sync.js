@@ -4,18 +4,32 @@
 // without Google or IndexedDB.
 
 import { readOutbox, removeOps } from "./outbox.js";
-import { getEntry } from "./db.js";
+import { getEntry, getImage } from "./db.js";
 import { getBuckets } from "./buckets.js";
 import { getConnection, getToken } from "./googleAuth.js";
 import { createSheetsProvider } from "./sheetsSync.js";
 import { createDocsProvider } from "./docsSync.js";
+import { blobDimensions } from "./capture.js";
+
+// Fetch a screenshot blob + pixel dimensions for the Docs provider.
+async function getImageInfo(entryId) {
+  const blob = await getImage(entryId);
+  if (!blob) return null;
+  let dims = null;
+  try {
+    dims = await blobDimensions(blob); // needs createImageBitmap (present in SW)
+  } catch {
+    /* size fallback handled by the provider */
+  }
+  return { blob, width: dims?.width, height: dims?.height };
+}
 
 // Both providers are always live: sheet-kind buckets mirror to the spreadsheet,
 // doc-kind buckets each mirror to their own Google Doc.
 function makeProviders(deps = {}) {
   return {
     sheet: createSheetsProvider({ getToken, ...deps }),
-    doc: createDocsProvider({ getToken, ...deps }),
+    doc: createDocsProvider({ getToken, getImage: getImageInfo, ...deps }),
   };
 }
 
