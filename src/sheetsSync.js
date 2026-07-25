@@ -95,10 +95,40 @@ export function createSheetsProvider({ getToken, fetchImpl = globalThis.fetch, s
     return 0;
   }
 
+  const CLEANED_KEY = "sheetsDefaultCleaned";
+
+  // Google seeds every new spreadsheet with an unused "Sheet1". Once at least
+  // one bucket tab exists, remove it — but only if it's empty and not one of
+  // our bucket tabs, so nothing a user typed in can be lost. One-time (flag),
+  // best-effort; also cleans spreadsheets created before this fix.
+  async function removeDefaultSheet(spreadsheetId) {
+    if (await store.get(CLEANED_KEY)) return;
+    try {
+      const meta = await api("GET", `${BASE}/${spreadsheetId}?fields=sheets.properties(sheetId,title)`);
+      const sheets = meta.sheets || [];
+      const owned = new Set(Object.values(await getTabMap()).map((t) => t.sheetId));
+      const leftover = sheets.find(
+        (s) => s.properties.title === "Sheet1" && !owned.has(s.properties.sheetId)
+      );
+      if (leftover && sheets.length > 1) {
+        const data = await api("GET", `${BASE}/${spreadsheetId}/values/${encRange("Sheet1", "A1:C3")}`);
+        if (!(data.values || []).length) {
+          await api("POST", `${BASE}/${spreadsheetId}:batchUpdate`, {
+            requests: [{ deleteSheet: { sheetId: leftover.properties.sheetId } }],
+          });
+        }
+      }
+      await store.set(CLEANED_KEY, true);
+    } catch {
+      /* retry on a later sync */
+    }
+  }
+
   // Insert or update the row for an entry.
   async function upsertEntry(entry) {
     const spreadsheetId = await ensureSpreadsheet();
     const tab = await ensureBucketTab(entry.bucketId, entry.bucketName || "Bucket");
+    await removeDefaultSheet(spreadsheetId);
     const row = rowFromEntry(entry);
     const at = await findRow(spreadsheetId, tab.title, entry.id);
     if (at) {
