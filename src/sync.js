@@ -4,8 +4,8 @@
 // without Google or IndexedDB.
 
 import { readOutbox, removeOps } from "./outbox.js";
-import { getEntry, getImage } from "./db.js";
-import { getBuckets } from "./buckets.js";
+import { getEntry, getImage, updateEntry } from "./db.js";
+import { getBuckets, signalDump } from "./buckets.js";
 import { getConnection, getToken } from "./googleAuth.js";
 import { createSheetsProvider } from "./sheetsSync.js";
 import { createDocsProvider } from "./docsSync.js";
@@ -78,6 +78,29 @@ export async function processOps(ops, { providers, getEntry: getEntryFn, nameByI
   return { done, failed, error };
 }
 
+// After a successful drain, OCR any newly-synced screenshots in Doc buckets so
+// their text becomes locally searchable (stored as entry.ocrText — never
+// re-enqueued; it's local metadata). Failures are non-fatal per entry.
+async function runOcrPass(ops, done, providers, kindById) {
+  const doneSet = new Set(done);
+  for (const op of ops) {
+    if (op.kind !== "upsert" || !doneSet.has(op.opId)) continue;
+    try {
+      const entry = await getEntry(op.entryId);
+      if (!entry?.hasImage || entry.ocrText !== undefined) continue;
+      if (kindById.get(entry.bucketId) !== "doc") continue;
+      const blob = await getImage(entry.id);
+      if (!blob) continue;
+      const text = await providers.doc.ocrImage(blob).catch(() => null);
+      // Store "" on empty/failed extraction so we don't retry forever.
+      await updateEntry(entry.id, { ocrText: text || "" });
+      if (text) await signalDump(); // let an open viewer pick up searchability
+    } catch {
+      /* non-fatal */
+    }
+  }
+}
+
 let draining = false;
 
 // Drain the outbox to the cloud. Safe to call often (re-entrancy guarded).
@@ -101,6 +124,7 @@ export async function drain() {
     const { done, failed, error } = await processOps(ops, { providers, getEntry, nameById, kindById });
     await removeOps(done);
     await setSyncState(failed ? "error" : "synced", failed ? error : "");
+    await runOcrPass(ops, done, providers, kindById);
   } catch (err) {
     console.warn("[dumpster] drain failed:", err.message);
     await setSyncState("error", err.message);

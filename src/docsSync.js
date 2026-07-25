@@ -69,6 +69,47 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     return api("DELETE", `https://www.googleapis.com/drive/v3/files/${id}`).catch(() => {});
   }
 
+  // Extract text from a screenshot using Drive's free convert-with-OCR:
+  // upload the PNG as a Google Doc (multipart, ocrLanguage) → export text/plain
+  // → delete the temp doc. Same drive.file scope; no Vision API.
+  async function ocrImage(blob) {
+    const token = await getToken(false);
+    const boundary = `dumpster-${crypto.randomUUID()}`;
+    const metadata = JSON.stringify({
+      name: "Dumpster OCR temp",
+      mimeType: "application/vnd.google-apps.document",
+    });
+    const body = new Blob(
+      [
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
+        `--${boundary}\r\nContent-Type: ${blob.type || "image/png"}\r\n\r\n`,
+        blob,
+        `\r\n--${boundary}--`,
+      ],
+      { type: `multipart/related; boundary=${boundary}` }
+    );
+    const up = await fetchImpl(`${DRIVE_UPLOAD}?uploadType=multipart&ocrLanguage=en`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+    if (!up.ok) throw new Error(`OCR upload ${up.status}`);
+    const { id } = await up.json();
+    try {
+      const ex = await fetchImpl(
+        `https://www.googleapis.com/drive/v3/files/${id}/export?mimeType=text/plain`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!ex.ok) throw new Error(`OCR export ${ex.status}`);
+      return (await ex.text()).trim();
+    } finally {
+      await deleteTempImage(id);
+    }
+  }
+
   // Inline image sized to fit the doc column (px → pt at 0.75, capped 460pt).
   function imageRequest(atIndex, fileId, dims) {
     const req = {
@@ -332,5 +373,5 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     await store.set(MAP_KEY, map);
   }
 
-  return { ensureBucketDoc, upsertEntry, deleteEntry, renameBucket, deleteBucket };
+  return { ensureBucketDoc, upsertEntry, deleteEntry, renameBucket, deleteBucket, ocrImage };
 }
