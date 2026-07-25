@@ -21,8 +21,9 @@ const chromeStore = {
 // getImage(entryId) → { blob, width?, height? } | null — injected so the provider
 // can fetch screenshot blobs (from IndexedDB in production, fixtures in tests).
 export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, store = chromeStore, getImage } = {}) {
-  const MAP_KEY = "docsDocMap"; // { [bucketId]: { docId, title, lastDate } }
+  const MAP_KEY = "docsDocMap"; // { [bucketId]: { docId, title, lastDate, refs } }
   const TITLE_RANGE = "__dumpster_title__"; // named range over the in-doc title
+  const REFS_RANGE = "__dumpster_refs__"; // named range over the References section
   const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 
   async function api(method, url, body) {
@@ -148,7 +149,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
         { createNamedRange: { name: TITLE_RANGE, range: r(1, 1 + t.length) } },
       ],
     });
-    map[bucketId] = { docId: created.documentId, title: bucketName, lastDate: "" };
+    map[bucketId] = { docId: created.documentId, title: bucketName, lastDate: "", refs: [] };
     await store.set(MAP_KEY, map);
     return map[bucketId];
   }
@@ -161,26 +162,17 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
   }
 
   // One entry's text block + offsets (relative to block start) for styling.
-  // Doc buckets are documentation — no workflow status line; meta is just
-  // source · notes, and it's omitted entirely when both are empty.
+  // Sources are NOT shown per line — they live in a shared References section at
+  // the bottom of the doc. The optional meta line is just the user's notes.
   function buildBlock(entry) {
     const content = String(entry.content || "").trim() || "(empty)";
-    const src = entry.sourceTitle || entry.sourceUrl || "";
-    let meta = "";
-    let srcOffset = -1;
-    if (src) {
-      srcOffset = 0;
-      meta = src;
-    }
-    if (entry.notes) meta = meta ? `${meta}  ·  ${entry.notes}` : entry.notes;
+    const meta = entry.notes ? String(entry.notes) : "";
     return {
       text: meta ? `${content}\n${meta}\n\n` : `${content}\n\n`, // blank line separates entries
       contentLen: content.length,
       contentIsUrl: /^https?:\/\/\S+$/.test(content),
       metaOffset: content.length + 1,
       metaLen: meta.length,
-      srcOffset,
-      srcLen: src.length,
     };
   }
 
@@ -235,17 +227,81 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
         },
       });
     }
-    if (block.srcOffset >= 0 && entry.sourceUrl) {
-      const s = at + block.metaOffset + block.srcOffset;
-      reqs.push({
+    return reqs;
+  }
+
+  // ---- References section (unique source links, pinned at the bottom) ----
+
+  const refKey = (e) => (e.sourceUrl || e.sourceTitle || "").trim();
+
+  // Rebuild the References section from the bucket's stored unique sources:
+  // delete the old section (if any) and re-insert it at the very end, so it
+  // always stays at the bottom. No-op when there are no sources.
+  async function rebuildRefs(bucketId) {
+    const map = await getMap();
+    const tab = map[bucketId];
+    const refs = tab?.refs || [];
+    if (!tab) return;
+    const doc = await getDoc(tab.docId);
+    const existing = rangeOf(doc, REFS_RANGE);
+
+    const requests = [];
+    let end;
+    if (existing) {
+      requests.push({ deleteNamedRange: { name: REFS_RANGE } });
+      requests.push({ deleteContentRange: { range: r(existing.start, existing.end) } });
+      end = existing.start; // section is always last → deletion leaves the doc ending here
+    } else {
+      const content = doc.body?.content || [];
+      end = Math.max(1, (content[content.length - 1]?.endIndex || 2) - 1);
+    }
+    if (!refs.length) {
+      if (requests.length) await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, { requests });
+      return;
+    }
+
+    const headingText = "References\n";
+    let text = headingText;
+    const links = [];
+    for (const ref of refs) {
+      const label = ref.title || ref.url;
+      links.push({ offset: text.length, len: label.length, url: ref.url });
+      text += `${label}\n`;
+    }
+    requests.push({ insertText: { location: { index: end }, text } });
+    requests.push({
+      updateParagraphStyle: {
+        range: r(end, end + headingText.length),
+        paragraphStyle: { namedStyleType: "HEADING_2" },
+        fields: "namedStyleType",
+      },
+    });
+    for (const l of links) {
+      if (!l.url) continue;
+      requests.push({
         updateTextStyle: {
-          range: r(s, s + block.srcLen),
-          textStyle: { link: { url: entry.sourceUrl } },
+          range: r(end + l.offset, end + l.offset + l.len),
+          textStyle: { link: { url: l.url } },
           fields: "link",
         },
       });
     }
-    return reqs;
+    requests.push({ createNamedRange: { name: REFS_RANGE, range: r(end, end + text.length) } });
+    await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, { requests });
+  }
+
+  // Record a new unique source; returns true if the References section needs a rebuild.
+  async function noteSource(bucketId, entry) {
+    const key = refKey(entry);
+    if (!key) return false;
+    const map = await getMap();
+    const tab = map[bucketId];
+    if (!tab) return false;
+    tab.refs = tab.refs || [];
+    if (tab.refs.some((ref) => (ref.url || ref.title) === key)) return false;
+    tab.refs.push({ url: entry.sourceUrl || "", title: entry.sourceTitle || "" });
+    await store.set(MAP_KEY, map);
+    return true;
   }
 
   function getDoc(docId) {
@@ -268,6 +324,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const doc = await getDoc(tab.docId);
     const block = buildBlock(entry);
     const existing = rangeOf(doc, entry.id);
+    const refsRange = rangeOf(doc, REFS_RANGE); // entries append above this
 
     // Screenshot entries: stage a temp public Drive copy for Docs to ingest.
     let img = null;
@@ -298,9 +355,11 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
         return;
       }
 
-      // Append at the end; add a date heading when the day changes.
+      // Append after the last entry but BEFORE the References section (so
+      // References stays at the very bottom); else at the doc end.
       const content = doc.body?.content || [];
-      const insertAt = Math.max(1, (content[content.length - 1]?.endIndex || 2) - 1);
+      const docEnd = Math.max(1, (content[content.length - 1]?.endIndex || 2) - 1);
+      const insertAt = refsRange ? refsRange.start : docEnd;
       const heading = dateLabel(entry.createdAt);
       const needHeading = tab.lastDate !== heading;
       const headingText = needHeading ? `${heading}\n` : "";
@@ -334,6 +393,9 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
       // Docs copied the bytes at insert time; remove the temp file either way.
       if (tempFileId) await deleteTempImage(tempFileId);
     }
+
+    // Keep the bottom References section current if this entry cited a new source.
+    if (await noteSource(entry.bucketId, entry)) await rebuildRefs(entry.bucketId);
   }
 
   async function deleteEntry(entryId, bucketId) {
