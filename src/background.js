@@ -115,6 +115,26 @@ function flashBadgeError() {
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
 }
 
+// Capture (region or visible) into a bucket. Returns { ok } | { cancelled }.
+async function captureScreenshot(tab, mode, bucketId) {
+  let rect = null;
+  if (mode === "region") {
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: regionSelectOverlay });
+    rect = res?.result;
+    if (!rect) return { cancelled: true };
+    await new Promise((r) => setTimeout(r, 80)); // let the overlay's removal paint
+  }
+  await saveScreenshot(bucketId, tab, rect);
+  return { ok: true };
+}
+
+async function lastDocBucket() {
+  const docs = (await getBuckets()).filter((b) => b.kind === "doc");
+  if (!docs.length) return null;
+  const lastId = await getLastBucketId();
+  return docs.find((b) => b.id === lastId) || docs[0];
+}
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const id = String(info.menuItemId);
 
@@ -128,17 +148,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (id.startsWith("shot:")) {
     const [, mode, bucketId] = id.split(":");
     try {
-      let rect = null;
-      if (mode === "reg") {
-        const [res] = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: regionSelectOverlay,
-        });
-        rect = res?.result;
-        if (!rect) return; // cancelled
-        await new Promise((r) => setTimeout(r, 80)); // let the overlay's removal paint
-      }
-      await saveScreenshot(bucketId, tab, rect);
+      await captureScreenshot(tab, mode === "reg" ? "region" : "visible", bucketId);
     } catch (err) {
       console.warn("[dumpster] screenshot failed:", err.message);
       flashBadgeError();
@@ -322,6 +332,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       flashBadge();
       sendResponse({ ok: true, bucketName: bucket.name });
     } catch (err) {
+      sendResponse({ ok: false, error: err.message });
+    }
+  })();
+  return true; // async sendResponse
+});
+
+// ---- Floating launcher: screenshot to the last-used Doc bucket ----
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "dumpster-shot") return;
+  (async () => {
+    try {
+      const bucket = await lastDocBucket();
+      if (!bucket) {
+        flashBadgeError();
+        return sendResponse({ ok: false, error: "No Doc bucket yet" });
+      }
+      const res = await captureScreenshot(sender.tab, msg.mode === "region" ? "region" : "visible", bucket.id);
+      if (res.cancelled) return sendResponse({ ok: false, cancelled: true });
+      sendResponse({ ok: true, bucketName: bucket.name });
+    } catch (err) {
+      flashBadgeError();
       sendResponse({ ok: false, error: err.message });
     }
   })();

@@ -33,12 +33,14 @@ you meant to come back to.
     screenshots, see this session's captures.
   - **OCR**: synced screenshots get their text extracted (via Drive's free OCR)
     so the bucket filter can find words *inside* your screenshots.
-  - **Selection helper**: on the current tab, select text and a small floating
-    pill appears — **H1 / H2 / list / ¶** — click one to save that text to your
-    last-used Doc bucket, formatted as a real Heading 1/2, bullet, or paragraph
-    in the Google Doc. It's injected into the tab **on demand** (opening the
-    Dumpster popup activates it for that tab — no page reload, and it never runs
-    on your other tabs in the background). Toggle it off in the popup.
+  - **Page helper** (current tab, activated by opening the Dumpster popup —
+    injected on demand, never running on other tabs in the background; toggle it
+    off in the popup):
+    - a **floating dock** on the right edge that expands on hover with
+      **Region** / **Visible** screenshot buttons (→ last-used Doc bucket);
+    - a **selection menu**: select text and a small pill appears —
+      **H1 / H2 / list / ¶** — click one to save that text to your last-used Doc
+      bucket, formatted as a real Heading 1/2, bullet, or paragraph in the Doc.
 - **Auto-captured context** — every dump records a timestamp plus the page URL
   and title it came from, so even a bare note remembers where you were.
 - **Append-only** — dumps only ever add rows; nothing is overwritten. The dumped

@@ -12,13 +12,7 @@
   if (window.__dumpsterSelInit) return;
   window.__dumpsterSelInit = true;
 
-  let enabled = true;
-  chrome.storage.local.get("selectionHelper", (o) => {
-    enabled = o.selectionHelper !== false;
-  });
-  chrome.storage.onChanged.addListener((ch, area) => {
-    if (area === "local" && ch.selectionHelper) enabled = ch.selectionHelper.newValue !== false;
-  });
+  let enabled = true; // master toggle; storage wiring set up at the bottom
 
   // Shadow DOM so page CSS can't restyle the pill (and vice versa).
   const host = document.createElement("div");
@@ -26,6 +20,65 @@
   const root = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = `
+    .launcher[hidden] { display: none !important; }
+    .launcher {
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      background: #1f2430;
+      border: 1px solid #343b4a;
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.32);
+      font: 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      transition: transform 0.16s ease;
+      transform-origin: right center;
+    }
+    .launcher .l-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: #10b981;
+      box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.25);
+      flex: 0 0 auto;
+      cursor: pointer;
+    }
+    .launcher .l-menu {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .launcher:hover .l-menu,
+    .launcher.open .l-menu {
+      display: flex;
+    }
+    .launcher .l-menu button {
+      border: none;
+      background: none;
+      color: #e5e9f0;
+      font: inherit;
+      font-weight: 600;
+      text-align: left;
+      white-space: nowrap;
+      padding: 7px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+    .launcher .l-menu button:hover {
+      background: #10b981;
+      color: #04150f;
+    }
+    .l-note {
+      color: #e5e9f0;
+      font-weight: 600;
+      padding: 7px 4px;
+      white-space: nowrap;
+    }
     .pill[hidden] { display: none !important; }
     .pill {
       position: fixed;
@@ -155,6 +208,60 @@
     );
   });
 
+  // ---- Floating launcher (docked right edge; expands on hover) ----
+  const launcher = document.createElement("div");
+  launcher.className = "launcher";
+  launcher.hidden = !enabled;
+  function renderLauncher() {
+    launcher.textContent = "";
+    const icon = document.createElement("span");
+    icon.className = "l-icon";
+    icon.title = "Dumpster — screenshot to your Doc bucket";
+    const menu = document.createElement("div");
+    menu.className = "l-menu";
+    for (const b of [
+      { mode: "region", label: "⬚ Region" },
+      { mode: "visible", label: "🖼 Visible" },
+    ]) {
+      const btn = document.createElement("button");
+      btn.dataset.mode = b.mode;
+      btn.textContent = b.label;
+      menu.appendChild(btn);
+    }
+    launcher.append(menu, icon); // menu expands leftward; icon stays at the edge
+  }
+  renderLauncher();
+  root.appendChild(launcher);
+
+  let lNoteTimer = null;
+  function launcherNote(msg) {
+    launcher.textContent = "";
+    const note = document.createElement("span");
+    note.className = "l-note";
+    note.textContent = msg;
+    launcher.appendChild(note);
+    clearTimeout(lNoteTimer);
+    lNoteTimer = setTimeout(renderLauncher, 1600);
+  }
+
+  launcher.addEventListener("click", (e) => {
+    const btn = e.target.closest?.("button[data-mode]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const mode = btn.dataset.mode;
+    // Hide our whole UI so the launcher/pill aren't in the capture, then shoot.
+    host.style.visibility = "hidden";
+    setTimeout(() => {
+      chrome.runtime.sendMessage({ type: "dumpster-shot", mode }, (res) => {
+        host.style.visibility = "";
+        if (chrome.runtime.lastError) return launcherNote("Reloaded — try again");
+        if (res?.cancelled) return; // region selection cancelled
+        launcherNote(res?.ok ? `✓ Saved to ${res.bucketName}` : res?.error || "Failed");
+      });
+    }, 60);
+  });
+
   document.addEventListener("mouseup", (e) => {
     if (e.composedPath().includes(host)) return;
     setTimeout(maybeShow, 10); // let the selection settle
@@ -166,6 +273,22 @@
     if (e.key === "Escape") hide();
   });
   document.addEventListener("scroll", hide, true);
+
+  // Master enable/disable (popup toggle) — governs both the pill and launcher.
+  function applyEnabled() {
+    launcher.hidden = !enabled;
+    if (!enabled) hide();
+  }
+  chrome.storage.local.get("selectionHelper", (o) => {
+    enabled = o.selectionHelper !== false;
+    applyEnabled();
+  });
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area === "local" && ch.selectionHelper) {
+      enabled = ch.selectionHelper.newValue !== false;
+      applyEnabled();
+    }
+  });
 
   document.documentElement.appendChild(host);
 })();
