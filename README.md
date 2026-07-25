@@ -75,6 +75,21 @@ While the consent screen is in **Testing**, only added test users (≤100) can c
 To ship publicly, submit for verification — `drive.file` is non-restricted, so it's the
 lighter brand verification, not the restricted-scope security assessment.
 
+## Publishing
+
+Everything needed to ship Dumpster to the Chrome Web Store:
+
+- **[docs/PUBLISHING.md](docs/PUBLISHING.md)** — the full step-by-step: developer
+  account, packaging, the extension-ID / OAuth-client reconciliation (the one
+  gotcha), consent-screen production, store listing + permission justifications,
+  and how to release updates.
+- **`./scripts/package.sh`** — builds a clean store upload at
+  `dist/dumpster-v<version>.zip` (strips the dev-only manifest `"key"`, warns if
+  the OAuth client id is still the placeholder).
+- **[docs/PRIVACY.md](docs/PRIVACY.md)** — privacy policy draft. Deploy it to a
+  public URL (e.g. GitHub Pages) and fill in the date + contact email before
+  submitting the listing — the store requires the URL.
+
 ## Roadmap (Phase 2)
 
 - **Docs sync target** — a switchable second provider with inline screenshots
