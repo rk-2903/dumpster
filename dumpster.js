@@ -607,7 +607,7 @@ async function openExportModal() {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = b.id;
-    cb.checked = b.id === activeBucketId; // default: the bucket you're viewing
+    cb.checked = false; // start empty — user picks explicitly (Export disabled until then)
     const span = document.createElement("span");
     span.textContent = b.name;
     label.append(cb, span);
