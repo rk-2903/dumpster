@@ -31,10 +31,13 @@
         autofocus
       ></textarea>
 
-      <label class="attach">
-        <input type="checkbox" id="attach-page" checked />
-        <span id="attach-label" class="attach-label">Attach this page</span>
-      </label>
+      <div class="attach-row">
+        <label class="attach">
+          <input type="checkbox" id="attach-page" checked />
+          <span id="attach-label" class="attach-label">Attach this page</span>
+        </label>
+        <button id="shot" class="shot-btn" title="Screenshot the visible page into this Doc bucket">📸 Screenshot</button>
+      </div>
 
       <ul id="staged" class="staged" hidden></ul>
 

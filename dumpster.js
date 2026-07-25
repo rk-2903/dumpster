@@ -14,6 +14,7 @@ import {
   countByBucket,
   updateEntry,
   deleteEntry,
+  getImage,
   STATUSES,
   DEFAULT_STATUS,
 } from "./src/db.js";
@@ -176,7 +177,10 @@ function visibleEntries() {
   const q = els.search.value.trim().toLowerCase();
   if (!q) return currentEntries;
   return currentEntries.filter((e) =>
-    [e.content, e.sourceTitle, e.sourceUrl, e.status, e.notes].join(" ").toLowerCase().includes(q)
+    [e.content, e.sourceTitle, e.sourceUrl, e.status, e.notes, e.ocrText || ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(q)
   );
 }
 
@@ -202,6 +206,7 @@ function renderView() {
 }
 
 function renderList(entries) {
+  revokeThumbs();
   els.rows.innerHTML = "";
   els.table.hidden = entries.length === 0;
   els.empty.hidden = entries.length !== 0;
@@ -397,16 +402,62 @@ function renderRow(entry) {
   return tr;
 }
 
+// Object URLs for row thumbnails, revoked whenever the list re-renders.
+const thumbUrls = new Set();
+function revokeThumbs() {
+  for (const u of thumbUrls) URL.revokeObjectURL(u);
+  thumbUrls.clear();
+}
+
 // The dumped text: linkified read-only view, double-click to edit inline.
+// Entries with a screenshot get a clickable thumbnail above the text.
 function renderContentView(td, entry) {
   td.textContent = "";
   td.title = "Double-click to edit";
+  if (entry.hasImage) {
+    const img = document.createElement("img");
+    img.className = "cell-thumb";
+    img.alt = "Screenshot";
+    img.title = "Click to view full size";
+    getImage(entry.id).then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      thumbUrls.add(url);
+      img.src = url;
+    });
+    img.addEventListener("click", () => openLightbox(entry.id));
+    td.appendChild(img);
+  }
   td.appendChild(linkify(entry.content));
   td.ondblclick = (e) => {
-    // Don't hijack a click meant for a link.
-    if (e.target.tagName === "A") return;
+    // Don't hijack a click meant for a link or the thumbnail.
+    if (e.target.tagName === "A" || e.target.tagName === "IMG") return;
     editContent(td, entry);
   };
+}
+
+// Full-size screenshot overlay; click anywhere or Esc closes.
+async function openLightbox(entryId) {
+  const blob = await getImage(entryId);
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const backdrop = document.createElement("div");
+  backdrop.className = "lightbox";
+  const img = document.createElement("img");
+  img.src = url;
+  img.alt = "Screenshot";
+  backdrop.appendChild(img);
+  const close = () => {
+    URL.revokeObjectURL(url);
+    backdrop.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  backdrop.addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(backdrop);
 }
 
 function editContent(td, entry) {

@@ -946,3 +946,35 @@ textarea.editable::placeholder {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   }
 }
+
+/* ---- Screenshot thumbnails + lightbox ---- */
+.cell-thumb {
+  display: block;
+  max-width: 220px;
+  max-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: zoom-in;
+  background: var(--chip);
+}
+.cell-thumb:hover {
+  border-color: var(--accent);
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 70;
+  cursor: zoom-out;
+  padding: 28px;
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}

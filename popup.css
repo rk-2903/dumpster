@@ -250,3 +250,50 @@ body {
   border-radius: 20px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
+
+.attach-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 9px 0 4px;
+}
+.attach-row .attach {
+  margin: 0;
+  min-width: 0;
+}
+.shot-btn {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shot-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.shot-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.staged .thumb {
+  width: 34px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.toast.toast-error {
+  background: var(--danger);
+  color: #fff;
+}
