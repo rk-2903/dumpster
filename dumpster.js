@@ -600,6 +600,8 @@ function wireExportModal() {
 
 async function openExportModal() {
   const buckets = await getBuckets();
+  // The bucket being viewed is listed first and pre-selected.
+  buckets.sort((a, b) => (a.id === activeBucketId ? -1 : b.id === activeBucketId ? 1 : 0));
   els.exportBuckets.innerHTML = "";
   for (const b of buckets) {
     const label = document.createElement("label");
@@ -607,7 +609,7 @@ async function openExportModal() {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = b.id;
-    cb.checked = false; // start empty — user picks explicitly (Export disabled until then)
+    cb.checked = b.id === activeBucketId;
     const span = document.createElement("span");
     span.textContent = b.name;
     label.append(cb, span);
@@ -626,11 +628,12 @@ function selectedExportIds() {
 }
 
 // Keep the "All buckets" checkbox and Export button in sync with the selection.
+// No indeterminate dash — All reads checked only when everything is selected.
 function refreshExportState() {
   const boxes = [...els.exportBuckets.querySelectorAll("input")];
   const checked = boxes.filter((b) => b.checked).length;
   els.exportAll.checked = checked > 0 && checked === boxes.length;
-  els.exportAll.indeterminate = checked > 0 && checked < boxes.length;
+  els.exportAll.indeterminate = false;
   els.exportGo.disabled = checked === 0;
 }
 
