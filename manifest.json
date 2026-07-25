@@ -3,7 +3,7 @@
   "name": "Dumpster",
   "version": "0.1.0",
   "description": "Quick-dump links, snippets, and notes into buckets. Local-first, append-forever.",
-  "permissions": ["contextMenus", "storage", "tabs", "identity", "alarms"],
+  "permissions": ["contextMenus", "storage", "tabs", "identity", "alarms", "scripting", "activeTab"],
   "host_permissions": [
     "https://sheets.googleapis.com/",
     "https://docs.googleapis.com/",

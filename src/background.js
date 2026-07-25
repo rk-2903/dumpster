@@ -1,7 +1,7 @@
 // Background service worker: seeds buckets, keeps the right-click "Dump to ▸"
 // menu in sync with the bucket list, and handles reflex dumps from that menu.
 
-import { getBuckets, ensureSeeded, setLastBucketId, signalDump } from "./buckets.js";
+import { getBuckets, ensureSeeded, addBucket, setLastBucketId, signalDump } from "./buckets.js";
 import { addEntry, makeEntry } from "./db.js";
 import { enqueueUpsert } from "./outbox.js";
 import { drain } from "./sync.js";
@@ -70,29 +70,58 @@ function contentFromClick(info) {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const id = String(info.menuItemId);
 
-  // "New bucket…": stash the would-be dump, then open a small naming window;
-  // newbucket.js creates the bucket and files the dump.
+  // "New bucket…": ask for the name right on the page via an injected native
+  // prompt (activeTab is granted by the menu click). Falls back to a small
+  // naming window on pages Chrome won't inject into (chrome://, Web Store).
   if (id.startsWith("newbucket:")) {
     const kind = id.slice("newbucket:".length);
-    await new Promise((r) =>
-      chrome.storage.local.set(
-        {
-          pendingDump: {
-            kind,
-            content: contentFromClick(info),
-            sourceUrl: tab?.url || info.pageUrl || "",
-            sourceTitle: tab?.title || "",
-          },
-        },
-        r
-      )
-    );
-    chrome.windows.create({
-      url: chrome.runtime.getURL("newbucket.html"),
-      type: "popup",
-      width: 400,
-      height: 300,
+    const dump = {
+      kind,
+      content: contentFromClick(info),
+      sourceUrl: tab?.url || info.pageUrl || "",
+      sourceTitle: tab?.title || "",
+    };
+
+    let name = null;
+    let injected = false;
+    if (tab?.id != null) {
+      try {
+        const [res] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (label) => window.prompt(label),
+          args: [`Name your new ${kind === "doc" ? "Doc" : "Sheet"} bucket:`],
+        });
+        injected = true;
+        name = res?.result;
+      } catch {
+        /* injection not allowed here → fall back below */
+      }
+    }
+
+    if (!injected) {
+      await new Promise((r) => chrome.storage.local.set({ pendingDump: dump }, r));
+      chrome.windows.create({
+        url: chrome.runtime.getURL("newbucket.html"),
+        type: "popup",
+        width: 400,
+        height: 300,
+      });
+      return;
+    }
+
+    if (!name || !name.trim()) return; // user cancelled the prompt
+    const bucket = await addBucket(name.trim(), kind);
+    const entry = makeEntry({
+      bucketId: bucket.id,
+      content: dump.content,
+      sourceUrl: dump.sourceUrl,
+      sourceTitle: dump.sourceTitle,
     });
+    await addEntry(entry);
+    await setLastBucketId(bucket.id);
+    await signalDump();
+    await enqueueUpsert(entry.id);
+    flashBadge();
     return;
   }
 
