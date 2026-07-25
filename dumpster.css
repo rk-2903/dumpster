@@ -978,3 +978,18 @@ textarea.editable::placeholder {
   border-radius: 10px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
 }
+
+/* Text-like button beside the bucket heading linking to its synced Doc/Sheet */
+.bucket-open-link {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  white-space: nowrap;
+}
+.bucket-open-link:hover {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}

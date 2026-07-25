@@ -27,6 +27,7 @@ import {
 import { connect as gConnect, disconnect as gDisconnect, getConnection } from "./src/googleAuth.js";
 
 const els = {
+  bucketOpenLink: document.getElementById("bucket-open-link"),
   sheetTabs: document.getElementById("sheet-tabs"),
   docTabs: document.getElementById("doc-tabs"),
   addSheet: document.getElementById("add-sheet"),
@@ -165,11 +166,40 @@ async function renderBucket() {
   const bucket = buckets.find((b) => b.id === activeBucketId);
   els.bucketName.textContent = bucket ? bucket.name : "—";
   activeBucketKind = bucket?.kind === "doc" ? "doc" : "sheet";
+  await renderBucketOpenLink(bucket);
   // Doc buckets are documentation: no workflow status, so no Board view either.
   els.viewToggle.hidden = activeBucketKind === "doc";
   els.table.classList.toggle("no-status", activeBucketKind === "doc");
   currentEntries = bucket ? await getEntriesByBucket(bucket.id) : [];
   renderView();
+}
+
+// "Open doc ↗" / "Open sheet ↗" next to the bucket heading — links straight to
+// this bucket's synced Google Doc, or its exact spreadsheet tab (#gid). Hidden
+// until the bucket has actually synced (its file/tab exists).
+async function renderBucketOpenLink(bucket) {
+  const link = els.bucketOpenLink;
+  link.hidden = true;
+  if (!bucket) return;
+  if (bucket.kind === "doc") {
+    const map = (await getSetting("docsDocMap")) || {};
+    const d = map[bucket.id];
+    if (d) {
+      link.href = `https://docs.google.com/document/d/${d.docId}/edit`;
+      link.textContent = "Open doc ↗";
+      link.title = "Open this bucket's Google Doc";
+      link.hidden = false;
+    }
+  } else {
+    const sid = await getSetting("sheetsSpreadsheetId");
+    const tab = ((await getSetting("sheetsTabMap")) || {})[bucket.id];
+    if (sid && tab) {
+      link.href = `https://docs.google.com/spreadsheets/d/${sid}/edit#gid=${tab.sheetId}`;
+      link.textContent = "Open sheet ↗";
+      link.title = "Open this bucket's tab in the Google Sheet";
+      link.hidden = false;
+    }
+  }
 }
 
 // Entries matching the current search box.
