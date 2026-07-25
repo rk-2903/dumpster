@@ -26,7 +26,10 @@ import {
 import { connect as gConnect, disconnect as gDisconnect, getConnection } from "./src/googleAuth.js";
 
 const els = {
-  tabs: document.getElementById("tabs"),
+  sheetTabs: document.getElementById("sheet-tabs"),
+  docTabs: document.getElementById("doc-tabs"),
+  addSheet: document.getElementById("add-sheet"),
+  addDoc: document.getElementById("add-doc"),
   bucketName: document.getElementById("bucket-name"),
   entryCount: document.getElementById("entry-count"),
   rows: document.getElementById("rows"),
@@ -68,6 +71,7 @@ const els = {
 };
 
 let activeBucketId = null;
+let activeBucketKind = "sheet"; // doc buckets have no status/board
 let currentEntries = []; // entries for the active bucket (unfiltered)
 let currentView = "list"; // "list" | "board"
 
@@ -82,6 +86,8 @@ async function init() {
 
   els.rename.addEventListener("click", onRename);
   els.del.addEventListener("click", onDelete);
+  els.addSheet.addEventListener("click", () => onNewBucket("sheet"));
+  els.addDoc.addEventListener("click", () => onNewBucket("doc"));
   els.search.addEventListener("input", renderView);
   els.viewToggle.addEventListener("click", onToggleView);
   wireExportModal();
@@ -115,38 +121,52 @@ async function init() {
   });
 }
 
+// Two rows: Sheet buckets, then Doc buckets. Each row scrolls horizontally
+// with its own pinned ＋ button (wired once in init).
 async function renderTabs() {
   const buckets = await getBuckets();
   const counts = await countByBucket();
   if (!buckets.some((b) => b.id === activeBucketId)) {
     activeBucketId = buckets[0]?.id || null;
   }
-  els.tabs.innerHTML = "";
-  for (const b of buckets) {
-    const tab = document.createElement("button");
-    tab.className = "tab" + (b.id === activeBucketId ? " active" : "");
-    tab.innerHTML = `${escapeHtml(b.name)}<span class="badge">${counts[b.id] || 0}</span>`;
-    tab.addEventListener("click", async () => {
-      activeBucketId = b.id;
-      els.search.value = "";
-      await setLastBucketId(b.id);
-      await renderTabs();
-      await renderBucket();
-    });
-    els.tabs.appendChild(tab);
+  const rows = [
+    { el: els.sheetTabs, kind: "sheet" },
+    { el: els.docTabs, kind: "doc" },
+  ];
+  for (const row of rows) {
+    row.el.innerHTML = "";
+    for (const b of buckets.filter((x) => x.kind === row.kind)) {
+      const tab = document.createElement("button");
+      tab.className = "tab" + (b.id === activeBucketId ? " active" : "");
+      tab.innerHTML = `${escapeHtml(b.name)}<span class="badge">${counts[b.id] || 0}</span>`;
+      tab.addEventListener("click", async () => {
+        activeBucketId = b.id;
+        els.search.value = "";
+        await setLastBucketId(b.id);
+        await renderTabs();
+        await renderBucket();
+      });
+      row.el.appendChild(tab);
+    }
+    if (!row.el.children.length) {
+      const hint = document.createElement("span");
+      hint.className = "tab-row-empty";
+      hint.textContent = row.kind === "doc" ? "No Doc buckets yet" : "No Sheet buckets yet";
+      row.el.appendChild(hint);
+    }
   }
-  const add = document.createElement("button");
-  add.className = "tab add";
-  add.textContent = "＋";
-  add.title = "New bucket";
-  add.addEventListener("click", onNewBucket);
-  els.tabs.appendChild(add);
+  // Keep the active tab visible in its scroll row.
+  document.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 async function renderBucket() {
   const buckets = await getBuckets();
   const bucket = buckets.find((b) => b.id === activeBucketId);
   els.bucketName.textContent = bucket ? bucket.name : "—";
+  activeBucketKind = bucket?.kind === "doc" ? "doc" : "sheet";
+  // Doc buckets are documentation: no workflow status, so no Board view either.
+  els.viewToggle.hidden = activeBucketKind === "doc";
+  els.table.classList.toggle("no-status", activeBucketKind === "doc");
   currentEntries = bucket ? await getEntriesByBucket(bucket.id) : [];
   renderView();
 }
@@ -174,7 +194,7 @@ function updateCount(shown) {
 function renderView() {
   const entries = visibleEntries();
   updateCount(entries.length);
-  const board = currentView === "board";
+  const board = currentView === "board" && activeBucketKind !== "doc";
   els.listView.hidden = board;
   els.board.hidden = !board;
   if (board) renderBoard(entries);
@@ -348,6 +368,7 @@ function renderRow(entry) {
   }
 
   const status = document.createElement("td");
+  status.className = "cell-status";
   status.appendChild(renderStatusSelect(entry));
 
   const notes = document.createElement("td");
@@ -505,10 +526,11 @@ function linkify(text) {
   return frag;
 }
 
-async function onNewBucket() {
-  const name = prompt("Name your new bucket:");
+async function onNewBucket(kind) {
+  const label = kind === "doc" ? "Doc" : "Sheet";
+  const name = prompt(`Name your new ${label} bucket:`);
   if (!name || !name.trim()) return;
-  const bucket = await addBucket(name.trim());
+  const bucket = await addBucket(name.trim(), kind);
   activeBucketId = bucket.id;
   await setLastBucketId(bucket.id);
   await renderTabs();
@@ -802,9 +824,6 @@ function wireCloudModal() {
   });
   els.cloudConnect.addEventListener("click", onConnect);
   els.cloudDisconnect.addEventListener("click", onDisconnect);
-  document
-    .querySelectorAll('input[name="cloud-target-connected"]')
-    .forEach((rb) => rb.addEventListener("change", () => onSwitchTarget(rb.value)));
 }
 
 async function openCloudModal() {
@@ -829,16 +848,11 @@ async function refreshCloudModal() {
   }
   els.cloudStatusText.textContent = label;
   els.cloudStatusDot.dataset.state = state;
-
-  const target = (await getSetting("syncTarget")) || "sheets";
-  document
-    .querySelectorAll('input[name="cloud-target-connected"]')
-    .forEach((rb) => (rb.checked = rb.value === target));
-  await renderCloudLinks(target);
+  await renderCloudLinks();
 }
 
-// Links to the synced artifacts: the spreadsheet, or each bucket's doc.
-async function renderCloudLinks(target) {
+// Links to everything synced: the spreadsheet plus each Doc bucket's doc.
+async function renderCloudLinks() {
   els.cloudLinks.innerHTML = "";
   const mkLink = (href, text) => {
     const a = document.createElement("a");
@@ -849,39 +863,20 @@ async function renderCloudLinks(target) {
     a.textContent = text;
     els.cloudLinks.appendChild(a);
   };
-  if (target === "docs") {
-    const map = (await getSetting("docsDocMap")) || {};
-    const buckets = await getBuckets();
-    for (const b of buckets) {
-      const d = map[b.id];
-      if (d) mkLink(`https://docs.google.com/document/d/${d.docId}/edit`, `Open “${b.name}” doc ↗`);
-    }
-    if (!els.cloudLinks.children.length) {
-      const span = document.createElement("span");
-      span.className = "cloud-links-empty";
-      span.textContent = "Docs are created as dumps sync.";
-      els.cloudLinks.appendChild(span);
-    }
-  } else {
-    const sid = await getSetting("sheetsSpreadsheetId");
-    if (sid) mkLink(`https://docs.google.com/spreadsheets/d/${sid}/edit`, "Open Google Sheet ↗");
+  const sid = await getSetting("sheetsSpreadsheetId");
+  if (sid) mkLink(`https://docs.google.com/spreadsheets/d/${sid}/edit`, "Open Google Sheet ↗");
+  const map = (await getSetting("docsDocMap")) || {};
+  const buckets = await getBuckets();
+  for (const b of buckets) {
+    const d = map[b.id];
+    if (d) mkLink(`https://docs.google.com/document/d/${d.docId}/edit`, `Open “${b.name}” doc ↗`);
   }
-}
-
-// Switching targets redirects future syncs; offer to copy existing data too
-// (providers upsert by entry id, so the copy is idempotent).
-async function onSwitchTarget(target) {
-  const prev = (await getSetting("syncTarget")) || "sheets";
-  if (target === prev) return;
-  await setSetting("syncTarget", target);
-  const label = target === "docs" ? "Google Docs" : "Google Sheets";
-  if (confirm(`Future dumps will sync to ${label}. Also copy everything already in Dumpster there now?`)) {
-    await backfillAll();
-    showToast(`Copying everything to ${label}…`);
-  } else {
-    showToast(`Future dumps will sync to ${label}`);
+  if (!els.cloudLinks.children.length) {
+    const span = document.createElement("span");
+    span.className = "cloud-links-empty";
+    span.textContent = "Files are created in your Drive as dumps sync.";
+    els.cloudLinks.appendChild(span);
   }
-  await refreshCloudModal();
 }
 
 // Queue every entry, oldest first so the Docs provider's date grouping and the
@@ -896,8 +891,6 @@ async function onConnect() {
   els.cloudConnect.disabled = true;
   els.cloudConnect.textContent = "Connecting…";
   try {
-    const target = document.querySelector('input[name="cloud-target"]:checked')?.value || "sheets";
-    await setSetting("syncTarget", target);
     await gConnect(); // interactive OAuth via chrome.identity
     // Backfill: queue all existing dumps so current data lands in the target.
     await backfillAll();

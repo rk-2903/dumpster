@@ -20,6 +20,7 @@ const chromeStore = {
 
 export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, store = chromeStore } = {}) {
   const MAP_KEY = "docsDocMap"; // { [bucketId]: { docId, title, lastDate } }
+  const TITLE_RANGE = "__dumpster_title__"; // named range over the in-doc title
 
   async function api(method, url, body) {
     const token = await getToken(false);
@@ -45,6 +46,22 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const map = await getMap();
     if (map[bucketId]) return map[bucketId];
     const created = await api("POST", `${DOCS}/documents`, { title: `Dumpster — ${bucketName}` });
+    // The bucket name is also the doc's visible heading (TITLE style), wrapped
+    // in a named range so a bucket rename can rewrite it later.
+    const t = `${bucketName}\n`;
+    await api("POST", `${DOCS}/documents/${created.documentId}:batchUpdate`, {
+      requests: [
+        { insertText: { location: { index: 1 }, text: t } },
+        {
+          updateParagraphStyle: {
+            range: r(1, 1 + t.length),
+            paragraphStyle: { namedStyleType: "TITLE" },
+            fields: "namedStyleType",
+          },
+        },
+        { createNamedRange: { name: TITLE_RANGE, range: r(1, 1 + t.length) } },
+      ],
+    });
     map[bucketId] = { docId: created.documentId, title: bucketName, lastDate: "" };
     await store.set(MAP_KEY, map);
     return map[bucketId];
@@ -58,19 +75,20 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
   }
 
   // One entry's text block + offsets (relative to block start) for styling.
+  // Doc buckets are documentation — no workflow status line; meta is just
+  // source · notes, and it's omitted entirely when both are empty.
   function buildBlock(entry) {
     const content = String(entry.content || "").trim() || "(empty)";
-    let meta = `Status: ${entry.status || "To Do"}`;
-    let srcOffset = -1;
     const src = entry.sourceTitle || entry.sourceUrl || "";
+    let meta = "";
+    let srcOffset = -1;
     if (src) {
-      meta += "  ·  ";
-      srcOffset = meta.length;
-      meta += src;
+      srcOffset = 0;
+      meta = src;
     }
-    if (entry.notes) meta += `  ·  ${entry.notes}`;
+    if (entry.notes) meta = meta ? `${meta}  ·  ${entry.notes}` : entry.notes;
     return {
-      text: `${content}\n${meta}\n\n`, // trailing blank line separates entries
+      text: meta ? `${content}\n${meta}\n\n` : `${content}\n\n`, // blank line separates entries
       contentLen: content.length,
       contentIsUrl: /^https?:\/\/\S+$/.test(content),
       metaOffset: content.length + 1,
@@ -90,7 +108,9 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
           fields: "namedStyleType",
         },
       },
-      {
+    ];
+    if (block.metaLen > 0) {
+      reqs.push({
         updateTextStyle: {
           range: r(at + block.metaOffset, at + block.metaOffset + block.metaLen),
           textStyle: {
@@ -100,8 +120,8 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
           },
           fields: "italic,fontSize,foregroundColor",
         },
-      },
-    ];
+      });
+    }
     if (block.contentIsUrl) {
       reqs.push({
         updateTextStyle: {
@@ -213,6 +233,27 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const tab = map[bucketId];
     if (!tab) return;
     await api("PATCH", `${DRIVE}/files/${tab.docId}`, { name: `Dumpster — ${newName}` });
+    // Rewrite the in-doc title heading as well.
+    const doc = await getDoc(tab.docId);
+    const span = rangeOf(doc, TITLE_RANGE);
+    if (span) {
+      const t = `${newName}\n`;
+      await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, {
+        requests: [
+          { deleteNamedRange: { name: TITLE_RANGE } },
+          { deleteContentRange: { range: r(span.start, span.end) } },
+          { insertText: { location: { index: span.start }, text: t } },
+          {
+            updateParagraphStyle: {
+              range: r(span.start, span.start + t.length),
+              paragraphStyle: { namedStyleType: "TITLE" },
+              fields: "namedStyleType",
+            },
+          },
+          { createNamedRange: { name: TITLE_RANGE, range: r(span.start, span.start + t.length) } },
+        ],
+      });
+    }
     tab.title = newName;
     await store.set(MAP_KEY, map);
   }

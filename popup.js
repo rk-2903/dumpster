@@ -63,11 +63,21 @@ async function refreshBuckets(selectId) {
   const buckets = await getBuckets();
   const chosen = selectId || (await getLastBucketId());
   els.bucket.innerHTML = "";
-  for (const b of buckets) {
-    const opt = document.createElement("option");
-    opt.value = b.id;
-    opt.textContent = b.name;
-    els.bucket.appendChild(opt);
+  for (const group of [
+    { kind: "sheet", label: "Sheets" },
+    { kind: "doc", label: "Docs" },
+  ]) {
+    const inGroup = buckets.filter((b) => b.kind === group.kind);
+    if (!inGroup.length) continue;
+    const og = document.createElement("optgroup");
+    og.label = group.label;
+    for (const b of inGroup) {
+      const opt = document.createElement("option");
+      opt.value = b.id;
+      opt.textContent = b.name;
+      og.appendChild(opt);
+    }
+    els.bucket.appendChild(og);
   }
   if (chosen) els.bucket.value = chosen;
 }

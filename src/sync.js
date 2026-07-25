@@ -10,44 +10,48 @@ import { getConnection, getToken } from "./googleAuth.js";
 import { createSheetsProvider } from "./sheetsSync.js";
 import { createDocsProvider } from "./docsSync.js";
 
-function providerFor(target, deps = {}) {
-  if (target === "docs") return createDocsProvider({ getToken, ...deps });
-  return createSheetsProvider({ getToken, ...deps }); // default: sheets
+// Both providers are always live: sheet-kind buckets mirror to the spreadsheet,
+// doc-kind buckets each mirror to their own Google Doc.
+function makeProviders(deps = {}) {
+  return {
+    sheet: createSheetsProvider({ getToken, ...deps }),
+    doc: createDocsProvider({ getToken, ...deps }),
+  };
 }
 
-function getTarget() {
-  return new Promise((r) => chrome.storage.local.get("syncTarget", (o) => r(o.syncTarget || "sheets")));
-}
 function setSyncState(state, error = "") {
   return new Promise((r) => chrome.storage.local.set({ syncState: state, syncError: error }, r));
 }
 
 /**
- * Process outbox ops against a provider, in order. Stops at the first failure and
- * leaves that op (and the rest) for the next retry. Returns the opIds that
- * succeeded so the caller can remove exactly those.
+ * Process outbox ops in order. Upserts route to the provider matching the
+ * bucket's kind; deletes and bucket ops are offered to both providers — the one
+ * that owns the bucket acts, the other no-ops (each checks its own map).
+ * Stops at the first failure and leaves that op (and the rest) for retry.
  *
- * deps: { provider, getEntry(id)->entry|undefined, nameById:Map<bucketId,name> }
+ * deps: { providers: {sheet, doc}, getEntry(id), nameById, kindById }
  */
-export async function processOps(ops, { provider, getEntry: getEntryFn, nameById }) {
+export async function processOps(ops, { providers, getEntry: getEntryFn, nameById, kindById }) {
   const done = [];
   let failed = false;
   let error = "";
+  const both = [providers.sheet, providers.doc];
   for (const op of ops) {
     try {
       if (op.kind === "upsert") {
         const entry = await getEntryFn(op.entryId);
         if (entry) {
           entry.bucketName = nameById.get(entry.bucketId) || "Bucket";
-          await provider.upsertEntry(entry);
+          const kind = kindById.get(entry.bucketId) === "doc" ? "doc" : "sheet";
+          await providers[kind].upsertEntry(entry);
         }
         // entry gone (deleted before push) → nothing to do; treat as done
       } else if (op.kind === "delete") {
-        await provider.deleteEntry(op.entryId, op.bucketId);
+        for (const p of both) await p.deleteEntry(op.entryId, op.bucketId);
       } else if (op.kind === "bucketRename") {
-        await provider.renameBucket(op.bucketId, op.name);
+        for (const p of both) await p.renameBucket(op.bucketId, op.name);
       } else if (op.kind === "bucketDelete") {
-        await provider.deleteBucket(op.bucketId);
+        for (const p of both) await p.deleteBucket(op.bucketId);
       }
       done.push(op.opId);
     } catch (err) {
@@ -67,9 +71,7 @@ export async function drain() {
   if (draining) return;
   const conn = await getConnection();
   if (!conn.connected) return;
-  const target = await getTarget();
-  const provider = providerFor(target);
-  if (!provider) return;
+  const providers = makeProviders();
 
   draining = true;
   try {
@@ -81,7 +83,8 @@ export async function drain() {
     await setSyncState("syncing");
     const buckets = await getBuckets();
     const nameById = new Map(buckets.map((b) => [b.id, b.name]));
-    const { done, failed, error } = await processOps(ops, { provider, getEntry, nameById });
+    const kindById = new Map(buckets.map((b) => [b.id, b.kind]));
+    const { done, failed, error } = await processOps(ops, { providers, getEntry, nameById, kindById });
     await removeOps(done);
     await setSyncState(failed ? "error" : "synced", failed ? error : "");
   } catch (err) {

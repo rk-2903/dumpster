@@ -22,7 +22,18 @@
       </div>
     </header>
 
-    <nav id="tabs" class="tabs" aria-label="Buckets"></nav>
+    <nav class="tab-rows" aria-label="Buckets">
+      <div class="tab-row">
+        <span class="tab-row-label">Sheets</span>
+        <div class="tab-scroll" id="sheet-tabs"></div>
+        <button type="button" class="tab-add-btn" id="add-sheet" title="New Sheet bucket">＋</button>
+      </div>
+      <div class="tab-row">
+        <span class="tab-row-label">Docs</span>
+        <div class="tab-scroll" id="doc-tabs"></div>
+        <button type="button" class="tab-add-btn" id="add-doc" title="New Doc bucket">＋</button>
+      </div>
+    </nav>
 
     <main class="content-area">
       <div class="bucket-toolbar">
@@ -100,21 +111,11 @@
 
         <div id="cloud-disconnected">
           <p class="modal-hint">
-            Connect your Google account to mirror every dump into your own Google Drive —
-            a spreadsheet or a set of docs, your choice. It stays in your Drive; nothing
+            Connect your Google account to mirror every dump into your own Google Drive.
+            <b>Sheet buckets</b> become tabs in one spreadsheet; <b>Doc buckets</b> each
+            get their own Google Doc, grouped by date. It stays in your Drive; nothing
             is sent anywhere else.
           </p>
-          <div class="modal-section">
-            <span class="modal-label">Sync to</span>
-            <label class="check">
-              <input type="radio" name="cloud-target" value="sheets" checked />
-              <span>Google Sheets — one spreadsheet, a tab per bucket</span>
-            </label>
-            <label class="check">
-              <input type="radio" name="cloud-target" value="docs" />
-              <span>Google Docs — one doc per bucket, grouped by date</span>
-            </label>
-          </div>
           <div class="modal-actions">
             <button type="button" id="cloud-cancel" class="btn subtle">Cancel</button>
             <button type="button" id="cloud-connect" class="btn primary">Connect Google</button>
@@ -127,17 +128,10 @@
             <span id="cloud-status-dot" class="dot"></span>
             <span id="cloud-status-text">Synced</span>
           </div>
-          <div class="modal-section">
-            <span class="modal-label">Sync to</span>
-            <label class="check">
-              <input type="radio" name="cloud-target-connected" value="sheets" />
-              <span>Google Sheets — one spreadsheet, a tab per bucket</span>
-            </label>
-            <label class="check">
-              <input type="radio" name="cloud-target-connected" value="docs" />
-              <span>Google Docs — one doc per bucket, grouped by date</span>
-            </label>
-          </div>
+          <p class="modal-hint">
+            <b>Sheet buckets</b> sync to one spreadsheet; <b>Doc buckets</b> each sync to
+            their own Google Doc.
+          </p>
           <div id="cloud-links" class="cloud-links"></div>
           <div class="modal-actions">
             <button type="button" id="cloud-disconnect" class="btn subtle danger">Disconnect</button>

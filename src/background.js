@@ -31,22 +31,28 @@ async function doRebuildMenus() {
 
   createItem({ id: PARENT_ID, title: "Dump to", contexts: CONTEXTS });
 
-  if (!buckets.length) {
+  // Two typed submenus: Sheet buckets and Doc buckets, each with its bucket
+  // list plus a "New bucket…" entry (which opens a small naming window,
+  // since context menus can't take text input).
+  const groups = [
+    { kind: "sheet", title: "Sheet" },
+    { kind: "doc", title: "Doc" },
+  ];
+  for (const g of groups) {
+    const groupId = `kind:${g.kind}`;
+    createItem({ id: groupId, parentId: PARENT_ID, title: g.title, contexts: CONTEXTS });
+    for (const bucket of buckets.filter((b) => b.kind === g.kind)) {
+      createItem({
+        id: `bucket:${bucket.id}`,
+        parentId: groupId,
+        title: bucket.name,
+        contexts: CONTEXTS,
+      });
+    }
     createItem({
-      id: "dumpster-empty",
-      parentId: PARENT_ID,
-      title: "No buckets yet — open Dumpster to add one",
-      enabled: false,
-      contexts: CONTEXTS,
-    });
-    return;
-  }
-
-  for (const bucket of buckets) {
-    createItem({
-      id: `bucket:${bucket.id}`,
-      parentId: PARENT_ID,
-      title: bucket.name,
+      id: `newbucket:${g.kind}`,
+      parentId: groupId,
+      title: "＋ New bucket…",
       contexts: CONTEXTS,
     });
   }
@@ -62,8 +68,36 @@ function contentFromClick(info) {
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (!info.menuItemId.startsWith("bucket:")) return;
-  const bucketId = info.menuItemId.slice("bucket:".length);
+  const id = String(info.menuItemId);
+
+  // "New bucket…": stash the would-be dump, then open a small naming window;
+  // newbucket.js creates the bucket and files the dump.
+  if (id.startsWith("newbucket:")) {
+    const kind = id.slice("newbucket:".length);
+    await new Promise((r) =>
+      chrome.storage.local.set(
+        {
+          pendingDump: {
+            kind,
+            content: contentFromClick(info),
+            sourceUrl: tab?.url || info.pageUrl || "",
+            sourceTitle: tab?.title || "",
+          },
+        },
+        r
+      )
+    );
+    chrome.windows.create({
+      url: chrome.runtime.getURL("newbucket.html"),
+      type: "popup",
+      width: 400,
+      height: 300,
+    });
+    return;
+  }
+
+  if (!id.startsWith("bucket:")) return;
+  const bucketId = id.slice("bucket:".length);
   const entry = makeEntry({
     bucketId,
     content: contentFromClick(info),

@@ -54,15 +54,17 @@ Reload the extension from that page after any code change.
 
 ## Google sync (setup — in progress)
 
-Cloud sync mirrors your dumps into your **own** Google Drive. Two targets, chosen at
-connect and switchable anytime from the Cloud modal (switching offers to copy
-existing dumps over — safe to repeat, upserts are keyed by entry id):
+Cloud sync mirrors your dumps into your **own** Google Drive. Buckets are **typed**
+(the tab bar shows a Sheets row and a Docs row; the right-click menu nests
+Sheet/Doc, each with a "＋ New bucket…" that opens a small naming window), and each
+type syncs to its own destination — both live at once:
 
-- **Google Sheets** (default) — one "Dumpster" spreadsheet, a tab per bucket, a row
-  per dump.
-- **Google Docs** — one doc per bucket ("Dumpster — <bucket>"), entries grouped
-  under date headings; each entry is a content line plus a status · source · notes
-  meta line. Edits/deletes are located via Docs named ranges keyed by entry id.
+- **Sheet buckets** (default) — tabs in one "Dumpster" spreadsheet, a row per dump,
+  with the To Do / In Process / Done workflow and Kanban board.
+- **Doc buckets** — documentation-style: each bucket gets its own Google Doc
+  (bucket name as the doc's title heading), entries grouped under date headings as
+  a content line plus a source · notes meta line — no workflow status. Edits and
+  deletes are located via Docs named ranges keyed by entry id.
 
 Local IndexedDB stays the source of truth; syncing is a background, non-blocking
 push so capture stays instant. Uses the narrow `drive.file` scope (only files the
