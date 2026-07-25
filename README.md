@@ -20,6 +20,17 @@ you meant to come back to.
   - **Right-click → … → ＋ New bucket…** — names the bucket via a prompt right
     on the page you're on and files the dump into it in one go (a small naming
     window appears only on pages Chrome can't inject into, e.g. `chrome://`).
+- **Study capture (Doc buckets)** — built for researching with a page open:
+  - **Screenshots**: from the popup (📸 button), right-click → **Screenshot to**
+    (visible area or **drag-a-region**), or **Alt+Shift+S** straight to your
+    last-used Doc bucket. Thumbnails show in the viewer (click for full size),
+    and synced screenshots appear **inside the bucket's Google Doc**, sized to
+    fit.
+  - **Study side panel** (right-click the toolbar icon → *Open study panel*): a
+    notebook pinned beside the page — pick a Doc bucket, type notes, snap
+    screenshots, see this session's captures.
+  - **OCR**: synced screenshots get their text extracted (via Drive's free OCR)
+    so the bucket filter can find words *inside* your screenshots.
 - **Auto-captured context** — every dump records a timestamp plus the page URL
   and title it came from, so even a bare note remembers where you were.
 - **Append-only** — dumps only ever add rows; nothing is overwritten. The dumped
@@ -82,7 +93,10 @@ are live at once, routed by each bucket's type:
 - **Doc buckets** — each bucket gets its own Google Doc (bucket name as the
   doc's title heading), entries grouped under date headings as a content line
   plus a source · notes meta line. Edits and deletes locate their block via Docs
-  named ranges keyed by entry id.
+  named ranges keyed by entry id. **Screenshots are embedded inline**: the Docs
+  API can only ingest publicly reachable images, so each screenshot is uploaded
+  to your Drive, made link-visible for a few seconds while Docs copies it into
+  the document, then deleted (the local copy remains the source of truth).
 
 Connecting (an official-style **Connect Google** button in the Cloud modal)
 backfills everything already in Dumpster, oldest-first. The Cloud chip shows
@@ -127,8 +141,6 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 
 ## Roadmap (Phase 2)
 
-- **Screenshots + OCR in the Docs target** — inline screenshots
-  (`insertInlineImage`) and Drive OCR on top of the shipped Docs provider.
 - **Convert bucket type** — switch an existing bucket between Sheet and Doc
   (with its synced data migrated to the new destination).
 - **Paywall / subscriptions** — gate premium features (e.g. Excel import/export,

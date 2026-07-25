@@ -74,7 +74,8 @@ Fill in on the dashboard:
     | `tabs` | Read the current tab's URL/title to attach as the dump's source. |
     | `identity` | Optional: connect the user's Google account for cloud sync. |
     | `alarms` | Retry queued cloud-sync writes in the background. |
-    | `scripting` + `activeTab` | Show the "name your new bucket" prompt on the current page when the user picks New bucket from the right-click menu. |
+    | `scripting` + `activeTab` | Show the "name your new bucket" prompt and the drag-a-region screenshot overlay on the current page; capture the visible tab when the user invokes a screenshot action. Nothing is read from pages. |
+    | `sidePanel` | The optional study panel (notes + screenshots pinned beside a page). |
     | Host permissions (googleapis.com) | Optional cloud sync writes to the user's own Google Sheet; no other hosts are contacted. |
   - Data-use disclosures: data stays on-device or in the user's own Google
     Drive; nothing is transmitted to the developer.
