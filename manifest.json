@@ -25,6 +25,14 @@
       "https://www.googleapis.com/auth/drive.file"
     ]
   },
+  "commands": {
+    "screenshot-to-doc": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Screenshot the visible page into your last-used Doc bucket"
+    }
+  },
   "background": {
     "service_worker": "src/background.js",
     "type": "module"

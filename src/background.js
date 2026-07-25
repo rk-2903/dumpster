@@ -1,7 +1,14 @@
 // Background service worker: seeds buckets, keeps the right-click "Dump to ▸"
 // menu in sync with the bucket list, and handles reflex dumps from that menu.
 
-import { getBuckets, ensureSeeded, addBucket, setLastBucketId, signalDump } from "./buckets.js";
+import {
+  getBuckets,
+  ensureSeeded,
+  addBucket,
+  getLastBucketId,
+  setLastBucketId,
+  signalDump,
+} from "./buckets.js";
 import { addEntry, makeEntry, putImage } from "./db.js";
 import { enqueueUpsert } from "./outbox.js";
 import { drain } from "./sync.js";
@@ -254,6 +261,26 @@ requestPersistence();
 // Keep the menu current whenever the bucket list changes (from popup or viewer).
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.buckets) rebuildMenus();
+});
+
+// ---- Keyboard shortcut: screenshot to the last-used Doc bucket ----
+// The command gesture grants activeTab for the focused tab.
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (command !== "screenshot-to-doc") return;
+  try {
+    const buckets = await getBuckets();
+    const docs = buckets.filter((b) => b.kind === "doc");
+    if (!docs.length) {
+      flashBadgeError(); // nowhere to put it — create a Doc bucket first
+      return;
+    }
+    const lastId = await getLastBucketId();
+    const target = docs.find((b) => b.id === lastId) || docs[0];
+    await saveScreenshot(target.id, tab, null);
+  } catch (err) {
+    console.warn("[dumpster] shortcut screenshot failed:", err.message);
+    flashBadgeError();
+  }
 });
 
 // ---- Cloud sync drain ----
