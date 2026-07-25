@@ -231,11 +231,7 @@ async function onSubmit() {
   const entries = [];
   for (const item of items) {
     if (item.kind === "image") {
-      const entry = makeEntry({
-        bucketId,
-        content: currentTab?.title ? `Screenshot — ${currentTab.title}` : "Screenshot",
-        ...source,
-      });
+      const entry = makeEntry({ bucketId, content: "", ...source }); // image only, no caption
       entry.hasImage = true;
       await putImage(entry.id, item.blob);
       if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl);

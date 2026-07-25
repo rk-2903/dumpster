@@ -96,7 +96,7 @@ async function saveScreenshot(bucketId, tab, rect) {
   const final = rect ? await cropBlob(blob, rect, rect.dpr || 1) : blob;
   const entry = makeEntry({
     bucketId,
-    content: tab?.title ? `Screenshot — ${tab.title}` : "Screenshot",
+    content: "", // image only — no caption text
     sourceUrl: tab?.url || "",
     sourceTitle: tab?.title || "",
   });

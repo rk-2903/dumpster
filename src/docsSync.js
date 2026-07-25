@@ -165,7 +165,10 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
   // Sources are NOT shown per line — they live in a shared References section at
   // the bottom of the doc. The optional meta line is just the user's notes.
   function buildBlock(entry) {
-    const content = String(entry.content || "").trim() || "(empty)";
+    const raw = String(entry.content || "").trim();
+    // Image-only entries carry no caption text; only truly empty non-image
+    // entries fall back to a placeholder.
+    const content = raw || (entry.hasImage ? "" : "(empty)");
     const meta = entry.notes ? String(entry.notes) : "";
     return {
       text: meta ? `${content}\n${meta}\n\n` : `${content}\n\n`, // blank line separates entries

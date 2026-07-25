@@ -136,10 +136,7 @@ async function onShot(region) {
     }
     const blob = await captureVisible(tab?.windowId);
     const final = rect ? await cropBlob(blob, rect, rect.dpr || 1) : blob;
-    await saveEntry({
-      content: tab?.title ? `Screenshot — ${tab.title}` : "Screenshot",
-      blob: final,
-    });
+    await saveEntry({ content: "", blob: final }); // image only, no caption
   } catch (err) {
     // Most likely: no live activeTab grant for this tab.
     showToast("Chrome needs a gesture — press Alt+Shift+S instead", true);

@@ -26,6 +26,7 @@
   const root = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = `
+    .pill[hidden] { display: none !important; }
     .pill {
       position: fixed;
       display: flex;
