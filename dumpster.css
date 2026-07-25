@@ -788,21 +788,37 @@ textarea.editable::placeholder {
   min-height: 36px;
 }
 .tab-row-label {
-  flex: 0 0 52px;
+  flex: 0 0 auto;
+  min-width: 56px;
+  text-align: center;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--muted);
+  padding: 4px 9px;
+  border-radius: 999px;
+}
+.tab-row-label.sheets {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 13%, transparent);
+}
+.tab-row-label.docs {
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 13%, transparent);
 }
 .tab-scroll {
   display: flex;
   gap: 4px;
   flex: 1;
   overflow-x: auto;
+  /* slim, subtle scrollbar (thumb only shows its tint, no track) */
   scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
   white-space: nowrap;
   align-items: center;
+}
+.tab-scroll:hover {
+  scrollbar-color: var(--muted) transparent;
 }
 .tab-scroll .tab {
   flex: 0 0 auto;
