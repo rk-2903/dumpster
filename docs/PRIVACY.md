@@ -52,6 +52,7 @@ transferred to third parties, and is not used for advertising.
 | Tabs | Attach the current page's URL/title to a dump you save. |
 | Identity | Only if you connect Google: sign-in for cloud sync. |
 | Alarms | Retry cloud-sync writes in the background if you're offline. |
+| Scripting (active tab only) | Show the "name your new bucket" prompt on the page when you use the right-click menu. Nothing is read from the page. |
 | googleapis.com access | Only if you connect Google: write to your own Sheet. |
 
 ## Deleting your data
