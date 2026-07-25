@@ -74,9 +74,8 @@ Fill in on the dashboard:
     | `tabs` | Read the current tab's URL/title to attach as the dump's source. |
     | `identity` | Optional: connect the user's Google account for cloud sync. |
     | `alarms` | Retry queued cloud-sync writes in the background. |
-    | `scripting` + `activeTab` | Show the "name your new bucket" prompt and the drag-a-region screenshot overlay on the current page; capture the visible tab when the user invokes a screenshot action. Nothing is read from pages. |
+    | `scripting` + `activeTab` | On the current tab only, and only when the user acts: the "name your new bucket" prompt, the drag-a-region screenshot overlay, visible-tab capture, and the on-demand selection helper. No page content is read except the user's explicit text selection when they click a helper button. Uses `activeTab` (current tab, on gesture) — **no `<all_urls>` / broad host access**. |
     | `sidePanel` | The optional study panel (notes + screenshots pinned beside a page). |
-    | Content script on `<all_urls>` | The selection helper — a floating pill shown when the user selects text, to save it (formatted) to a Doc bucket. Reads only the user's explicit selection on click; no page content is otherwise read or transmitted. (This broad-match content script triggers a "reads data on all sites" review — justify it here.) |
     | Host permissions (googleapis.com) | Optional cloud sync writes to the user's own Google Sheet; no other hosts are contacted. |
   - Data-use disclosures: data stays on-device or in the user's own Google
     Drive; nothing is transmitted to the developer.

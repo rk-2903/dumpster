@@ -7,6 +7,10 @@
 // `selectionHelper`).
 (() => {
   if (window.top !== window) return; // main frame only
+  // Injected on demand into the active tab (chrome.scripting) — guard against
+  // running twice if the popup is opened again on the same page.
+  if (window.__dumpsterSelInit) return;
+  window.__dumpsterSelInit = true;
 
   let enabled = true;
   chrome.storage.local.get("selectionHelper", (o) => {

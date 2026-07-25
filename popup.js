@@ -63,13 +63,31 @@ async function init() {
   updateSubmitState();
   updateShotState();
 
-  // Selection helper toggle (default on) — read by the content script.
+  // Selection helper: injected on demand into THIS tab (activeTab), so it never
+  // runs on tabs in the background and needs no page reload. Opening the popup
+  // (this code) activates it for the current tab when enabled.
   chrome.storage.local.get("selectionHelper", (o) => {
-    els.selectionHelper.checked = o.selectionHelper !== false;
+    const on = o.selectionHelper !== false;
+    els.selectionHelper.checked = on;
+    if (on) injectSelectionHelper();
   });
   els.selectionHelper.addEventListener("change", () => {
-    chrome.storage.local.set({ selectionHelper: els.selectionHelper.checked });
+    const on = els.selectionHelper.checked;
+    chrome.storage.local.set({ selectionHelper: on });
+    if (on) injectSelectionHelper(); // activate immediately on this tab
+    // Turning off: the already-injected script self-disables via the storage
+    // change; no re-injection until re-enabled.
   });
+}
+
+async function injectSelectionHelper() {
+  const tab = currentTab || (await getActiveTab());
+  if (!tab?.id) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["src/selectionMenu.js"] });
+  } catch {
+    /* restricted page (chrome://, Web Store, etc.) — can't inject there */
+  }
 }
 
 function getActiveTab() {
