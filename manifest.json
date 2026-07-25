@@ -1,9 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Dumpster",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Quick-dump links, snippets, and notes into buckets. Local-first, append-forever.",
-  "permissions": ["contextMenus", "storage", "tabs", "identity", "alarms", "scripting", "activeTab"],
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "tabs",
+    "identity",
+    "alarms",
+    "scripting",
+    "activeTab"
+  ],
   "host_permissions": [
     "https://sheets.googleapis.com/",
     "https://docs.googleapis.com/",
@@ -13,7 +21,9 @@
   "oauth2": {
     "//": "Replace client_id with your own OAuth 2.0 Client ID (type: Chrome Extension) from Google Cloud Console. See README > Google sync setup.",
     "client_id": "753913323279-qsob1eiaflkg8b8aq0pjlm688oi84df2.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/drive.file"]
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.file"
+    ]
   },
   "background": {
     "service_worker": "src/background.js",
