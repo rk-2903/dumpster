@@ -26,7 +26,10 @@ import {
 import { connect as gConnect, disconnect as gDisconnect, getConnection } from "./src/googleAuth.js";
 
 const els = {
-  tabs: document.getElementById("tabs"),
+  sheetTabs: document.getElementById("sheet-tabs"),
+  docTabs: document.getElementById("doc-tabs"),
+  addSheet: document.getElementById("add-sheet"),
+  addDoc: document.getElementById("add-doc"),
   bucketName: document.getElementById("bucket-name"),
   entryCount: document.getElementById("entry-count"),
   rows: document.getElementById("rows"),
@@ -60,7 +63,7 @@ const els = {
   cloudEmail: document.getElementById("cloud-email"),
   cloudStatusDot: document.getElementById("cloud-status-dot"),
   cloudStatusText: document.getElementById("cloud-status-text"),
-  cloudOpenSheet: document.getElementById("cloud-open-sheet"),
+  cloudLinks: document.getElementById("cloud-links"),
   cloudCancel: document.getElementById("cloud-cancel"),
   cloudConnect: document.getElementById("cloud-connect"),
   cloudDisconnect: document.getElementById("cloud-disconnect"),
@@ -68,6 +71,7 @@ const els = {
 };
 
 let activeBucketId = null;
+let activeBucketKind = "sheet"; // doc buckets have no status/board
 let currentEntries = []; // entries for the active bucket (unfiltered)
 let currentView = "list"; // "list" | "board"
 
@@ -82,6 +86,8 @@ async function init() {
 
   els.rename.addEventListener("click", onRename);
   els.del.addEventListener("click", onDelete);
+  els.addSheet.addEventListener("click", () => onNewBucket("sheet"));
+  els.addDoc.addEventListener("click", () => onNewBucket("doc"));
   els.search.addEventListener("input", renderView);
   els.viewToggle.addEventListener("click", onToggleView);
   wireExportModal();
@@ -115,38 +121,52 @@ async function init() {
   });
 }
 
+// Two rows: Sheet buckets, then Doc buckets. Each row scrolls horizontally
+// with its own pinned ＋ button (wired once in init).
 async function renderTabs() {
   const buckets = await getBuckets();
   const counts = await countByBucket();
   if (!buckets.some((b) => b.id === activeBucketId)) {
     activeBucketId = buckets[0]?.id || null;
   }
-  els.tabs.innerHTML = "";
-  for (const b of buckets) {
-    const tab = document.createElement("button");
-    tab.className = "tab" + (b.id === activeBucketId ? " active" : "");
-    tab.innerHTML = `${escapeHtml(b.name)}<span class="badge">${counts[b.id] || 0}</span>`;
-    tab.addEventListener("click", async () => {
-      activeBucketId = b.id;
-      els.search.value = "";
-      await setLastBucketId(b.id);
-      await renderTabs();
-      await renderBucket();
-    });
-    els.tabs.appendChild(tab);
+  const rows = [
+    { el: els.sheetTabs, kind: "sheet" },
+    { el: els.docTabs, kind: "doc" },
+  ];
+  for (const row of rows) {
+    row.el.innerHTML = "";
+    for (const b of buckets.filter((x) => x.kind === row.kind)) {
+      const tab = document.createElement("button");
+      tab.className = "tab" + (b.id === activeBucketId ? " active" : "");
+      tab.innerHTML = `${escapeHtml(b.name)}<span class="badge">${counts[b.id] || 0}</span>`;
+      tab.addEventListener("click", async () => {
+        activeBucketId = b.id;
+        els.search.value = "";
+        await setLastBucketId(b.id);
+        await renderTabs();
+        await renderBucket();
+      });
+      row.el.appendChild(tab);
+    }
+    if (!row.el.children.length) {
+      const hint = document.createElement("span");
+      hint.className = "tab-row-empty";
+      hint.textContent = row.kind === "doc" ? "No Doc buckets yet" : "No Sheet buckets yet";
+      row.el.appendChild(hint);
+    }
   }
-  const add = document.createElement("button");
-  add.className = "tab add";
-  add.textContent = "＋";
-  add.title = "New bucket";
-  add.addEventListener("click", onNewBucket);
-  els.tabs.appendChild(add);
+  // Keep the active tab visible in its scroll row.
+  document.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 async function renderBucket() {
   const buckets = await getBuckets();
   const bucket = buckets.find((b) => b.id === activeBucketId);
   els.bucketName.textContent = bucket ? bucket.name : "—";
+  activeBucketKind = bucket?.kind === "doc" ? "doc" : "sheet";
+  // Doc buckets are documentation: no workflow status, so no Board view either.
+  els.viewToggle.hidden = activeBucketKind === "doc";
+  els.table.classList.toggle("no-status", activeBucketKind === "doc");
   currentEntries = bucket ? await getEntriesByBucket(bucket.id) : [];
   renderView();
 }
@@ -174,7 +194,7 @@ function updateCount(shown) {
 function renderView() {
   const entries = visibleEntries();
   updateCount(entries.length);
-  const board = currentView === "board";
+  const board = currentView === "board" && activeBucketKind !== "doc";
   els.listView.hidden = board;
   els.board.hidden = !board;
   if (board) renderBoard(entries);
@@ -348,6 +368,7 @@ function renderRow(entry) {
   }
 
   const status = document.createElement("td");
+  status.className = "cell-status";
   status.appendChild(renderStatusSelect(entry));
 
   const notes = document.createElement("td");
@@ -505,10 +526,11 @@ function linkify(text) {
   return frag;
 }
 
-async function onNewBucket() {
-  const name = prompt("Name your new bucket:");
+async function onNewBucket(kind) {
+  const label = kind === "doc" ? "Doc" : "Sheet";
+  const name = prompt(`Name your new ${label} bucket:`);
   if (!name || !name.trim()) return;
-  const bucket = await addBucket(name.trim());
+  const bucket = await addBucket(name.trim(), kind);
   activeBucketId = bucket.id;
   await setLastBucketId(bucket.id);
   await renderTabs();
@@ -578,6 +600,8 @@ function wireExportModal() {
 
 async function openExportModal() {
   const buckets = await getBuckets();
+  // The bucket being viewed is listed first and pre-selected.
+  buckets.sort((a, b) => (a.id === activeBucketId ? -1 : b.id === activeBucketId ? 1 : 0));
   els.exportBuckets.innerHTML = "";
   for (const b of buckets) {
     const label = document.createElement("label");
@@ -585,7 +609,7 @@ async function openExportModal() {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = b.id;
-    cb.checked = b.id === activeBucketId; // default: the bucket you're viewing
+    cb.checked = b.id === activeBucketId;
     const span = document.createElement("span");
     span.textContent = b.name;
     label.append(cb, span);
@@ -604,11 +628,12 @@ function selectedExportIds() {
 }
 
 // Keep the "All buckets" checkbox and Export button in sync with the selection.
+// No indeterminate dash — All reads checked only when everything is selected.
 function refreshExportState() {
   const boxes = [...els.exportBuckets.querySelectorAll("input")];
   const checked = boxes.filter((b) => b.checked).length;
   els.exportAll.checked = checked > 0 && checked === boxes.length;
-  els.exportAll.indeterminate = checked > 0 && checked < boxes.length;
+  els.exportAll.indeterminate = false;
   els.exportGo.disabled = checked === 0;
 }
 
@@ -826,21 +851,70 @@ async function refreshCloudModal() {
   }
   els.cloudStatusText.textContent = label;
   els.cloudStatusDot.dataset.state = state;
+  await renderCloudLinks();
+}
+
+// Links to everything synced: the spreadsheet, plus a collapsible list of each
+// Doc bucket's doc. Only doc-kind buckets are listed — docsDocMap may hold
+// stale entries for buckets that predate typed buckets (or were retyped).
+async function renderCloudLinks() {
+  els.cloudLinks.innerHTML = "";
+  const mkLink = (href, text, parent) => {
+    const a = document.createElement("a");
+    a.className = "cloud-sheet-link";
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    a.href = href;
+    a.textContent = text;
+    parent.appendChild(a);
+  };
+
   const sid = await getSetting("sheetsSpreadsheetId");
-  els.cloudOpenSheet.hidden = !sid;
-  if (sid) els.cloudOpenSheet.href = `https://docs.google.com/spreadsheets/d/${sid}/edit`;
+  if (sid) mkLink(`https://docs.google.com/spreadsheets/d/${sid}/edit`, "Open Google Sheet ↗", els.cloudLinks);
+
+  const map = (await getSetting("docsDocMap")) || {};
+  const buckets = await getBuckets();
+  const docBuckets = buckets.filter((b) => b.kind === "doc" && map[b.id]);
+
+  if (docBuckets.length) {
+    const details = document.createElement("details");
+    details.className = "cloud-docs";
+    const summary = document.createElement("summary");
+    summary.innerHTML = `Doc links <span class="badge">${docBuckets.length}</span>`;
+    details.appendChild(summary);
+    const list = document.createElement("div");
+    list.className = "cloud-docs-list";
+    for (const b of docBuckets) {
+      mkLink(`https://docs.google.com/document/d/${map[b.id].docId}/edit`, `Open “${b.name}” doc ↗`, list);
+    }
+    details.appendChild(list);
+    els.cloudLinks.appendChild(details);
+  }
+
+  if (!els.cloudLinks.children.length) {
+    const span = document.createElement("span");
+    span.className = "cloud-links-empty";
+    span.textContent = "Files are created in your Drive as dumps sync.";
+    els.cloudLinks.appendChild(span);
+  }
+}
+
+// Queue every entry, oldest first so the Docs provider's date grouping and the
+// Sheet's row order both come out chronological.
+async function backfillAll() {
+  const all = await getAllEntries();
+  all.sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1));
+  await enqueueUpsertMany(all.map((e) => e.id));
 }
 
 async function onConnect() {
+  const label = document.getElementById("cloud-connect-label");
   els.cloudConnect.disabled = true;
-  els.cloudConnect.textContent = "Connecting…";
+  label.textContent = "Connecting…";
   try {
-    const target = document.querySelector('input[name="cloud-target"]:checked')?.value || "sheets";
-    await setSetting("syncTarget", target);
     await gConnect(); // interactive OAuth via chrome.identity
-    // Backfill: queue all existing dumps so current data lands in the sheet.
-    const all = await getAllEntries();
-    await enqueueUpsertMany(all.map((e) => e.id));
+    // Backfill: queue all existing dumps so current data lands in the target.
+    await backfillAll();
     await refreshCloudModal();
     updateCloudChip();
     showToast("Connected — syncing your dumps ✓");
@@ -848,7 +922,7 @@ async function onConnect() {
     showToast(`Google connect failed: ${err.message || "cancelled"}`, true);
   } finally {
     els.cloudConnect.disabled = false;
-    els.cloudConnect.textContent = "Connect Google";
+    label.textContent = "Connect Google";
   }
 }
 

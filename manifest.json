@@ -6,6 +6,7 @@
   "permissions": ["contextMenus", "storage", "tabs", "identity", "alarms"],
   "host_permissions": [
     "https://sheets.googleapis.com/",
+    "https://docs.googleapis.com/",
     "https://www.googleapis.com/",
     "https://oauth2.googleapis.com/"
   ],
