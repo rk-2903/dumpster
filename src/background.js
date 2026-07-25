@@ -76,6 +76,9 @@ async function doRebuildMenus() {
     createItem({ id: `shot:reg:${bucket.id}`, parentId: bid, title: "Select region", contexts: CONTEXTS });
   }
   createItem({ id: "shotnew", parentId: "shot-parent", title: "＋ New Doc bucket…", contexts: CONTEXTS });
+
+  // Right-click the toolbar icon → open the study side panel.
+  createItem({ id: "open-panel", title: "Open study panel", contexts: ["action"] });
 }
 
 // Choose what to dump based on what was right-clicked, preferring the most
@@ -114,6 +117,12 @@ function flashBadgeError() {
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const id = String(info.menuItemId);
+
+  // Must run before any await — sidePanel.open needs the live user gesture.
+  if (id === "open-panel") {
+    chrome.sidePanel.open({ windowId: tab.windowId });
+    return;
+  }
 
   // Screenshot to an existing Doc bucket: "shot:<vis|reg>:<bucketId>".
   if (id.startsWith("shot:")) {

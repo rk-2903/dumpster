@@ -10,8 +10,12 @@
     "identity",
     "alarms",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "sidePanel"
   ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "host_permissions": [
     "https://sheets.googleapis.com/",
     "https://docs.googleapis.com/",
