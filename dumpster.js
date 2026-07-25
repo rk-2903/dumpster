@@ -908,8 +908,9 @@ async function backfillAll() {
 }
 
 async function onConnect() {
+  const label = document.getElementById("cloud-connect-label");
   els.cloudConnect.disabled = true;
-  els.cloudConnect.textContent = "Connecting…";
+  label.textContent = "Connecting…";
   try {
     await gConnect(); // interactive OAuth via chrome.identity
     // Backfill: queue all existing dumps so current data lands in the target.
@@ -921,7 +922,7 @@ async function onConnect() {
     showToast(`Google connect failed: ${err.message || "cancelled"}`, true);
   } finally {
     els.cloudConnect.disabled = false;
-    els.cloudConnect.textContent = "Connect Google";
+    label.textContent = "Connect Google";
   }
 }
 
