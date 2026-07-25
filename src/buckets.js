@@ -17,7 +17,11 @@ function set(obj) {
 
 export async function getBuckets() {
   const buckets = await get(BUCKETS_KEY);
-  return Array.isArray(buckets) ? buckets : [];
+  // Normalize kind on read: buckets created before typing existed are "sheet".
+  return (Array.isArray(buckets) ? buckets : []).map((b) => ({
+    ...b,
+    kind: b.kind === "doc" ? "doc" : "sheet",
+  }));
 }
 
 /** Guarantee at least one bucket exists so the UI is never empty. */
@@ -29,13 +33,18 @@ export async function ensureSeeded() {
   return seeded;
 }
 
-function makeBucket(name) {
-  return { id: crypto.randomUUID(), name: name.trim(), createdAt: new Date().toISOString() };
+function makeBucket(name, kind = "sheet") {
+  return {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    kind: kind === "doc" ? "doc" : "sheet",
+    createdAt: new Date().toISOString(),
+  };
 }
 
-export async function addBucket(name) {
+export async function addBucket(name, kind = "sheet") {
   const buckets = await getBuckets();
-  const bucket = makeBucket(name);
+  const bucket = makeBucket(name, kind);
   await set({ [BUCKETS_KEY]: [...buckets, bucket] });
   return bucket;
 }
@@ -63,4 +72,11 @@ export async function getLastBucketId() {
 
 export function setLastBucketId(id) {
   return set({ [LAST_KEY]: id });
+}
+
+// Cross-context "a dump was added" ping. IndexedDB has no change event that
+// reaches an already-open viewer tab, so writing an always-changing value to
+// chrome.storage lets the viewer's storage.onChanged listener refresh live.
+export function signalDump() {
+  return set({ dumpSignal: Date.now() });
 }

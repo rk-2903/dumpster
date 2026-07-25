@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>New bucket</title>
+    <style>
+      body {
+        width: auto;
+        min-width: 0;
+      }
+      .preview {
+        margin: 8px 0 2px;
+        padding: 8px 10px;
+        background: var(--chip);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        max-height: 64px;
+        overflow: hidden;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"></span>
+        <span id="title">New bucket</span>
+      </div>
+    </header>
+    <main class="panel">
+      <label class="field-label" for="name">Bucket name</label>
+      <input id="name" class="content" style="min-height: 0" type="text" placeholder="e.g. Research" autofocus />
+      <div class="preview" id="preview"></div>
+      <div class="actions">
+        <button id="cancel" class="secondary-btn">Cancel</button>
+        <button id="create" class="primary-btn">Create &amp; dump</button>
+      </div>
+    </main>
+    <script type="module" src="newbucket.js"></script>
+  </body>
+</html>

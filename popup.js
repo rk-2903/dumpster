@@ -4,8 +4,10 @@ import {
   addBucket,
   getLastBucketId,
   setLastBucketId,
+  signalDump,
 } from "./src/buckets.js";
 import { addEntries, makeEntry } from "./src/db.js";
+import { enqueueUpsertMany } from "./src/outbox.js";
 
 const els = {
   bucket: document.getElementById("bucket"),
@@ -61,11 +63,21 @@ async function refreshBuckets(selectId) {
   const buckets = await getBuckets();
   const chosen = selectId || (await getLastBucketId());
   els.bucket.innerHTML = "";
-  for (const b of buckets) {
-    const opt = document.createElement("option");
-    opt.value = b.id;
-    opt.textContent = b.name;
-    els.bucket.appendChild(opt);
+  for (const group of [
+    { kind: "sheet", label: "Sheets" },
+    { kind: "doc", label: "Docs" },
+  ]) {
+    const inGroup = buckets.filter((b) => b.kind === group.kind);
+    if (!inGroup.length) continue;
+    const og = document.createElement("optgroup");
+    og.label = group.label;
+    for (const b of inGroup) {
+      const opt = document.createElement("option");
+      opt.value = b.id;
+      opt.textContent = b.name;
+      og.appendChild(opt);
+    }
+    els.bucket.appendChild(og);
   }
   if (chosen) els.bucket.value = chosen;
 }
@@ -140,6 +152,8 @@ async function onSubmit() {
   const entries = items.map((content) => makeEntry({ bucketId, content, ...source }));
   await addEntries(entries);
   await setLastBucketId(bucketId);
+  await signalDump(); // tell any open viewer tab to refresh live
+  await enqueueUpsertMany(entries.map((e) => e.id)); // queue for cloud sync
 
   staged = [];
   els.content.value = "";
