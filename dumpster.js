@@ -851,26 +851,43 @@ async function refreshCloudModal() {
   await renderCloudLinks();
 }
 
-// Links to everything synced: the spreadsheet plus each Doc bucket's doc.
+// Links to everything synced: the spreadsheet, plus a collapsible list of each
+// Doc bucket's doc. Only doc-kind buckets are listed — docsDocMap may hold
+// stale entries for buckets that predate typed buckets (or were retyped).
 async function renderCloudLinks() {
   els.cloudLinks.innerHTML = "";
-  const mkLink = (href, text) => {
+  const mkLink = (href, text, parent) => {
     const a = document.createElement("a");
     a.className = "cloud-sheet-link";
     a.target = "_blank";
     a.rel = "noreferrer";
     a.href = href;
     a.textContent = text;
-    els.cloudLinks.appendChild(a);
+    parent.appendChild(a);
   };
+
   const sid = await getSetting("sheetsSpreadsheetId");
-  if (sid) mkLink(`https://docs.google.com/spreadsheets/d/${sid}/edit`, "Open Google Sheet ↗");
+  if (sid) mkLink(`https://docs.google.com/spreadsheets/d/${sid}/edit`, "Open Google Sheet ↗", els.cloudLinks);
+
   const map = (await getSetting("docsDocMap")) || {};
   const buckets = await getBuckets();
-  for (const b of buckets) {
-    const d = map[b.id];
-    if (d) mkLink(`https://docs.google.com/document/d/${d.docId}/edit`, `Open “${b.name}” doc ↗`);
+  const docBuckets = buckets.filter((b) => b.kind === "doc" && map[b.id]);
+
+  if (docBuckets.length) {
+    const details = document.createElement("details");
+    details.className = "cloud-docs";
+    const summary = document.createElement("summary");
+    summary.innerHTML = `Doc links <span class="badge">${docBuckets.length}</span>`;
+    details.appendChild(summary);
+    const list = document.createElement("div");
+    list.className = "cloud-docs-list";
+    for (const b of docBuckets) {
+      mkLink(`https://docs.google.com/document/d/${map[b.id].docId}/edit`, `Open “${b.name}” doc ↗`, list);
+    }
+    details.appendChild(list);
+    els.cloudLinks.appendChild(details);
   }
+
   if (!els.cloudLinks.children.length) {
     const span = document.createElement("span");
     span.className = "cloud-links-empty";
