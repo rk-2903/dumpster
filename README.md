@@ -31,6 +31,10 @@ you meant to come back to.
     screenshots, see this session's captures.
   - **OCR**: synced screenshots get their text extracted (via Drive's free OCR)
     so the bucket filter can find words *inside* your screenshots.
+  - **Selection helper**: select text on any page and a small floating pill
+    appears — **H1 / H2 / list / ¶** — click one to save that text to your
+    last-used Doc bucket, formatted as a real Heading 1/2, bullet, or paragraph
+    in the Google Doc. Toggle it off in the popup.
 - **Auto-captured context** — every dump records a timestamp plus the page URL
   and title it came from, so even a bare note remembers where you were.
 - **Append-only** — dumps only ever add rows; nothing is overwritten. The dumped

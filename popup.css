@@ -297,3 +297,16 @@ body {
   background: var(--danger);
   color: #fff;
 }
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.setting-toggle input {
+  accent-color: var(--accent);
+}

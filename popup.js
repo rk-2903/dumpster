@@ -21,6 +21,7 @@ const els = {
   addMore: document.getElementById("add-more"),
   submit: document.getElementById("submit"),
   openViewer: document.getElementById("open-viewer"),
+  selectionHelper: document.getElementById("selection-helper"),
   toast: document.getElementById("toast"),
 };
 
@@ -61,6 +62,14 @@ async function init() {
   els.content.addEventListener("input", updateSubmitState);
   updateSubmitState();
   updateShotState();
+
+  // Selection helper toggle (default on) — read by the content script.
+  chrome.storage.local.get("selectionHelper", (o) => {
+    els.selectionHelper.checked = o.selectionHelper !== false;
+  });
+  els.selectionHelper.addEventListener("change", () => {
+    chrome.storage.local.set({ selectionHelper: els.selectionHelper.checked });
+  });
 }
 
 function getActiveTab() {

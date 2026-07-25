@@ -13,6 +13,11 @@ and stays on your device unless *you* connect your own Google account.
 - **Screenshots you take** — captured only when you explicitly use a screenshot
   action (popup button, right-click menu, keyboard shortcut, or study panel),
   and stored on your device.
+- **Text you select** — the optional selection helper shows a floating pill
+  when you select text on a page. It reads **only the text you selected, and
+  only at the moment you click one of its buttons** (H1/H2/list/paragraph) to
+  save it. It does not read, collect, or transmit anything else from the pages
+  you visit, and you can turn it off from the popup.
 - **Page context** — when you save from a page, the current tab's URL and title
   are attached to that dump so you remember where it came from.
 
@@ -64,6 +69,7 @@ transferred to third parties, and is not used for advertising.
 | Alarms | Retry cloud-sync writes in the background if you're offline. |
 | Scripting (active tab only) | Show the "name your new bucket" prompt and the drag-a-region screenshot overlay on the current page. Nothing is read from the page. |
 | Side panel | The optional study panel you can pin beside a page. |
+| Access to pages you visit (`<all_urls>`) | Runs the selection helper so its pill can appear where you select text. It reads only your explicit selection when you click a button — nothing else. |
 | googleapis.com access | Only if you connect Google: write to your own Sheet. |
 
 ## Deleting your data

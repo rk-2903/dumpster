@@ -184,6 +184,22 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     };
   }
 
+  // Map a saved selection format onto Docs paragraph styling for the content
+  // line ([at, at+contentLen+1) — includes the trailing newline).
+  function formatRequests(entry, block, at) {
+    const contentRange = r(at, at + block.contentLen + 1);
+    switch (entry.format) {
+      case "h1":
+        return [{ updateParagraphStyle: { range: contentRange, paragraphStyle: { namedStyleType: "HEADING_1" }, fields: "namedStyleType" } }];
+      case "h2":
+        return [{ updateParagraphStyle: { range: contentRange, paragraphStyle: { namedStyleType: "HEADING_2" }, fields: "namedStyleType" } }];
+      case "list":
+        return [{ createParagraphBullets: { range: contentRange, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } }];
+      default:
+        return []; // "p" / undefined → NORMAL_TEXT already applied
+    }
+  }
+
   // Styling for a block whose text was inserted at absolute index `at`.
   function styleRequests(entry, block, at) {
     const reqs = [
@@ -194,6 +210,8 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
           fields: "namedStyleType",
         },
       },
+      // Override the content paragraph's style when a format was chosen.
+      ...formatRequests(entry, block, at),
     ];
     if (block.metaLen > 0) {
       reqs.push({

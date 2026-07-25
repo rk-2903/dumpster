@@ -292,6 +292,42 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   }
 });
 
+// ---- Selection helper: save selected page text to the last-used Doc bucket ----
+// The in-page floating pill sends only the selected text + chosen format. We
+// file it into a Doc bucket so it lands in that bucket's Google Doc as a real
+// Heading 1/2, bullet list, or paragraph.
+const SELECTION_FORMATS = new Set(["h1", "h2", "list", "p"]);
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "dumpster-selection-save") return;
+  (async () => {
+    try {
+      const text = String(msg.text || "").trim();
+      if (!text) return sendResponse({ ok: false, error: "Empty selection" });
+      const docs = (await getBuckets()).filter((b) => b.kind === "doc");
+      if (!docs.length) return sendResponse({ ok: false, error: "No Doc bucket yet" });
+      const lastId = await getLastBucketId();
+      const bucket = docs.find((b) => b.id === lastId) || docs[0];
+      const tab = sender.tab;
+      const entry = makeEntry({
+        bucketId: bucket.id,
+        content: text,
+        sourceUrl: tab?.url || "",
+        sourceTitle: tab?.title || "",
+      });
+      if (SELECTION_FORMATS.has(msg.format)) entry.format = msg.format;
+      await addEntry(entry);
+      await setLastBucketId(bucket.id);
+      await signalDump();
+      await enqueueUpsert(entry.id);
+      flashBadge();
+      sendResponse({ ok: true, bucketName: bucket.name });
+    } catch (err) {
+      sendResponse({ ok: false, error: err.message });
+    }
+  })();
+  return true; // async sendResponse
+});
+
 // ---- Cloud sync drain ----
 // Any context (popup/viewer/context-menu) pings us via runtime.sendMessage after
 // enqueuing outbox ops; a periodic alarm retries anything still pending.
