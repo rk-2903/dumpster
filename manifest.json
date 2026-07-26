@@ -20,7 +20,8 @@
     "https://sheets.googleapis.com/",
     "https://docs.googleapis.com/",
     "https://www.googleapis.com/",
-    "https://oauth2.googleapis.com/"
+    "https://oauth2.googleapis.com/",
+    "https://znerazqhztkqperaqgaw.supabase.co/"
   ],
   "oauth2": {
     "//": "Replace client_id with your own OAuth 2.0 Client ID (type: Chrome Extension) from Google Cloud Console. See README > Google sync setup.",
