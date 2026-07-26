@@ -16,6 +16,7 @@ import { captureVisible, cropBlob } from "./capture.js";
 import { regionSelectOverlay } from "./regionSelect.js";
 import { getToken, getConnection } from "./googleAuth.js";
 import { createDocsProvider } from "./docsSync.js";
+import { track, flush, pingActive, initUninstallUrl } from "./telemetry.js";
 
 const PARENT_ID = "dumpster-parent";
 const CONTEXTS = ["selection", "link", "page", "image"];
@@ -111,10 +112,11 @@ async function saveScreenshot(bucketId, tab, rect) {
   flashBadge();
 }
 
-function flashBadgeError() {
+function flashBadgeError(code) {
   chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
   chrome.action.setBadgeText({ text: "✕" });
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
+  track("error", code ? { code } : undefined); // anonymous error counter
 }
 
 // Capture (region or visible) into a bucket. Returns { ok } | { cancelled }.
@@ -272,6 +274,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   await signalDump(); // refresh any open viewer tab live
   await enqueueUpsert(entry.id); // queue for cloud sync
   flashBadge();
+  track("feature", { name: "context-dump" });
 });
 
 function flashBadge() {
@@ -293,16 +296,32 @@ async function requestPersistence() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   await requestPersistence();
   await ensureSeeded();
   await rebuildMenus();
+  // Anonymous lifecycle telemetry (opt-out). Point the uninstall URL here too.
+  if (details.reason === "install") track("install");
+  else if (details.reason === "update") {
+    track("update", { from: details.previousVersion, to: chrome.runtime.getManifest().version });
+  }
+  initUninstallUrl();
+  flush();
 });
 
 // MV3 workers are torn down and restarted; rebuild on wake so the menu survives.
-chrome.runtime.onStartup.addListener(rebuildMenus);
+chrome.runtime.onStartup.addListener(() => {
+  rebuildMenus();
+  pingActive();
+  initUninstallUrl();
+  flush();
+});
 rebuildMenus();
 requestPersistence();
+// On every worker wake: count a daily-active ping and drain any queued events.
+pingActive();
+initUninstallUrl();
+flush();
 
 // Keep the menu current whenever the bucket list changes (from popup or viewer).
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -323,9 +342,10 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     const lastId = await getLastBucketId();
     const target = docs.find((b) => b.id === lastId) || docs[0];
     await saveScreenshot(target.id, tab, null);
+    track("feature", { name: "screenshot-hotkey" });
   } catch (err) {
     console.warn("[dumpster] shortcut screenshot failed:", err.message);
-    flashBadgeError();
+    flashBadgeError("screenshot");
   }
 });
 
@@ -357,6 +377,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await signalDump();
       await enqueueUpsert(entry.id);
       flashBadge();
+      track("feature", { name: "selection" });
       sendResponse({ ok: true, bucketName: bucket.name });
     } catch (err) {
       sendResponse({ ok: false, error: err.message });
@@ -377,7 +398,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       if (msg.mode === "ocr") {
         const r = await ocrCaptureToText(sender.tab, bucket.id, msg.rect || null);
-        if (!r.ok) flashBadgeError();
+        if (r.ok) track("feature", { name: "ocr" });
+        else flashBadgeError("ocr");
         return sendResponse(r.ok ? { ok: true, bucketName: bucket.name } : r);
       }
       const res = await captureScreenshot(
@@ -387,9 +409,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         msg.rect || null
       );
       if (res.cancelled) return sendResponse({ ok: false, cancelled: true });
+      track("feature", { name: msg.mode === "region" ? "screenshot-region" : "screenshot" });
       sendResponse({ ok: true, bucketName: bucket.name });
     } catch (err) {
-      flashBadgeError();
+      flashBadgeError("screenshot");
       sendResponse({ ok: false, error: err.message });
     }
   })();
@@ -400,11 +423,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Any context (popup/viewer/context-menu) pings us via runtime.sendMessage after
 // enqueuing outbox ops; a periodic alarm retries anything still pending.
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type === "dumpster-sync") drain();
+  if (msg?.type === "dumpster-sync") {
+    drain();
+    flush(); // piggyback telemetry delivery on the sync kick
+  }
 });
 chrome.alarms.create("dumpster-sync", { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === "dumpster-sync") drain();
+  if (a.name === "dumpster-sync") {
+    drain();
+    flush(); // durable retry for queued telemetry
+  }
 });
 chrome.runtime.onStartup.addListener(drain);
 drain();

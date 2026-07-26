@@ -9,6 +9,7 @@ import {
 import { addEntries, makeEntry, putImage } from "./src/db.js";
 import { enqueueUpsertMany } from "./src/outbox.js";
 import { captureVisible } from "./src/capture.js";
+import { track, pingActive, flush } from "./src/telemetry.js";
 
 const els = {
   bucket: document.getElementById("bucket"),
@@ -80,6 +81,10 @@ async function init() {
   els.content.addEventListener("input", updateSubmitState);
   updateSubmitState();
   updateShotState();
+
+  // Opening the popup is a good "active today" signal; also drain any queue.
+  pingActive();
+  flush();
 
   // Selection helper: injected on demand into THIS tab (activeTab), so it never
   // runs on tabs in the background and needs no page reload. Opening the popup
@@ -190,6 +195,7 @@ async function onScreenshot() {
     staged.push({ kind: "image", blob, thumbUrl: URL.createObjectURL(blob) });
     renderStaged();
     updateSubmitState();
+    track("feature", { name: "popup-screenshot" });
   } catch (err) {
     showToast(`Screenshot failed: ${err.message}`, true);
   } finally {
@@ -287,6 +293,7 @@ async function onSubmit() {
   await setLastBucketId(bucketId);
   await signalDump(); // tell any open viewer tab to refresh live
   await enqueueUpsertMany(entries.map((e) => e.id)); // queue for cloud sync
+  track("feature", { name: "popup-dump" });
 
   staged = [];
   els.content.value = "";
