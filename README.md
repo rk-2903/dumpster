@@ -36,8 +36,12 @@ you meant to come back to.
   - **Page helper** (current tab, activated by opening the Dumpster popup —
     injected on demand, never running on other tabs in the background; toggle it
     off in the popup):
-    - a **floating dock** on the right edge that expands on hover with
-      **Region** / **Visible** screenshot buttons (→ last-used Doc bucket);
+    - a **floating dock** on the right edge you can **drag up/down** (its
+      position is remembered). Hover to expand it: **H1 / H2 / List / ¶** to save
+      the current selection to your last-used Doc bucket, plus **Screenshot
+      region / page** buttons. Its **×** menu hides the dock **until next visit**,
+      **on this domain**, or **on all websites** (re-enable from the popup
+      toggle);
     - a **selection menu**: select text and a small pill appears —
       **H1 / H2 / list / ¶** — click one to save that text to your last-used Doc
       bucket, formatted as a real Heading 1/2, bullet, or paragraph in the Doc.

@@ -73,7 +73,12 @@ async function init() {
   });
   els.selectionHelper.addEventListener("change", () => {
     const on = els.selectionHelper.checked;
-    chrome.storage.local.set({ selectionHelper: on });
+    // Re-enabling from the popup is the master reset — clear any per-domain /
+    // all-sites dock hides the user set from the dock's × menu.
+    const patch = on
+      ? { selectionHelper: true, dumpsterDockHideAll: false, dumpsterDockHideDomains: [] }
+      : { selectionHelper: false };
+    chrome.storage.local.set(patch);
     if (on) injectSelectionHelper(); // activate immediately on this tab
     // Turning off: the already-injected script self-disables via the storage
     // change; no re-injection until re-enabled.
