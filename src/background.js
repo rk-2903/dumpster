@@ -14,6 +14,8 @@ import { enqueueUpsert } from "./outbox.js";
 import { drain } from "./sync.js";
 import { captureVisible, cropBlob } from "./capture.js";
 import { regionSelectOverlay } from "./regionSelect.js";
+import { getToken, getConnection } from "./googleAuth.js";
+import { createDocsProvider } from "./docsSync.js";
 
 const PARENT_ID = "dumpster-parent";
 const CONTEXTS = ["selection", "link", "page", "image"];
@@ -116,15 +118,40 @@ function flashBadgeError() {
 }
 
 // Capture (region or visible) into a bucket. Returns { ok } | { cancelled }.
-async function captureScreenshot(tab, mode, bucketId) {
-  let rect = null;
-  if (mode === "region") {
+// A pre-selected `rect` (e.g. from the in-page dock overlay) skips injection —
+// the context-menu path passes none and injects the overlay itself.
+async function captureScreenshot(tab, mode, bucketId, rect = null) {
+  if (mode === "region" && !rect) {
     const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: regionSelectOverlay });
     rect = res?.result;
     if (!rect) return { cancelled: true };
     await new Promise((r) => setTimeout(r, 80)); // let the overlay's removal paint
   }
-  await saveScreenshot(bucketId, tab, rect);
+  await saveScreenshot(bucketId, tab, mode === "region" ? rect : null);
+  return { ok: true };
+}
+
+// OCR a region (or the visible tab) to *text* and file it as a paragraph entry
+// in the Doc bucket — Drive's free convert-with-OCR. Needs a Google connection.
+async function ocrCaptureToText(tab, bucketId, rect) {
+  const { connected } = await getConnection();
+  if (!connected) return { ok: false, error: "Connect Google for OCR" };
+  const shot = await captureVisible(tab?.windowId);
+  const blob = rect ? await cropBlob(shot, rect, rect.dpr || 1) : shot;
+  const text = (await createDocsProvider({ getToken }).ocrImage(blob).catch(() => "")) || "";
+  if (!text) return { ok: false, error: "No text found" };
+  const entry = makeEntry({
+    bucketId,
+    content: text,
+    sourceUrl: tab?.url || "",
+    sourceTitle: tab?.title || "",
+  });
+  entry.format = "p";
+  await addEntry(entry);
+  await setLastBucketId(bucketId);
+  await signalDump();
+  await enqueueUpsert(entry.id);
+  flashBadge();
   return { ok: true };
 }
 
@@ -348,7 +375,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         flashBadgeError();
         return sendResponse({ ok: false, error: "No Doc bucket yet" });
       }
-      const res = await captureScreenshot(sender.tab, msg.mode === "region" ? "region" : "visible", bucket.id);
+      if (msg.mode === "ocr") {
+        const r = await ocrCaptureToText(sender.tab, bucket.id, msg.rect || null);
+        if (!r.ok) flashBadgeError();
+        return sendResponse(r.ok ? { ok: true, bucketName: bucket.name } : r);
+      }
+      const res = await captureScreenshot(
+        sender.tab,
+        msg.mode === "region" ? "region" : "visible",
+        bucket.id,
+        msg.rect || null
+      );
       if (res.cancelled) return sendResponse({ ok: false, cancelled: true });
       sendResponse({ ok: true, bucketName: bucket.name });
     } catch (err) {

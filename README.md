@@ -37,11 +37,13 @@ you meant to come back to.
     injected on demand, never running on other tabs in the background; toggle it
     off in the popup):
     - a **floating dock** on the right edge you can **drag up/down** (its
-      position is remembered). Hover to expand it: **H1 / H2 / List / ¶** to save
-      the current selection to your last-used Doc bucket, plus **Screenshot
-      region / page** buttons. Its **×** menu hides the dock **until next visit**,
-      **on this domain**, or **on all websites** (re-enable from the popup
-      toggle);
+      position is remembered). Hover to expand its toolbar: a **📷 page**
+      screenshot, a **⬚ region** screenshot (drag a rectangle right on the page),
+      an **OCR** grab (drag a region → its text is extracted and added as a
+      paragraph — needs Google connected), and **H1 / H2 / ≔ / ¶** chips that
+      save the current selection to your last-used Doc bucket. Its **×** menu
+      hides the dock **until next visit**, **on this domain**, or **on all
+      websites** (re-enable from the popup toggle);
     - a **selection menu**: select text and a small pill appears —
       **H1 / H2 / list / ¶** — click one to save that text to your last-used Doc
       bucket, formatted as a real Heading 1/2, bullet, or paragraph in the Doc.

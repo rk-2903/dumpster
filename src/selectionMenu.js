@@ -39,46 +39,75 @@
     }
     /* once dragged, an explicit top wins over the centered default */
     .launcher.pos { top: 0; transform: none; }
+    /* round drag handle with the Dumpster mark, always visible at the edge */
     .launcher .l-icon {
-      width: 26px;
-      height: 26px;
-      border-radius: 7px;
-      background: #10b981;
-      box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.25);
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25) inset, 0 0 0 1px #cfd6e4 inset;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex: 0 0 auto;
       cursor: grab;
       touch-action: none;
     }
+    .launcher .l-icon .l-logo {
+      width: 16px;
+      height: 16px;
+      border-radius: 5px;
+      background: #10b981;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+    }
     .launcher .l-icon.dragging { cursor: grabbing; }
+    /* horizontal toolbar that reveals on hover, expanding leftward */
     .launcher .l-menu {
       display: none;
-      flex-direction: column;
+      flex-direction: row;
+      align-items: center;
       gap: 2px;
     }
     .launcher:hover .l-menu,
     .launcher.open .l-menu {
       display: flex;
     }
-    .launcher .l-menu button {
+    /* icon buttons (camera / region / OCR) */
+    .launcher .l-menu .l-btn {
       border: none;
       background: none;
-      color: #e5e9f0;
-      font: inherit;
-      font-weight: 600;
-      text-align: left;
-      white-space: nowrap;
-      padding: 6px 10px;
-      border-radius: 7px;
+      color: #cfd6e4;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
     }
-    .launcher .l-menu button:hover {
-      background: #10b981;
-      color: #04150f;
+    .launcher .l-menu .l-btn svg { width: 19px; height: 19px; display: block; }
+    .launcher .l-menu .l-btn:hover { background: #10b981; color: #04150f; }
+    /* compact text chips (H1 / H2 / list / ¶) */
+    .launcher .l-menu .l-chip {
+      border: none;
+      background: none;
+      color: #cfd6e4;
+      font: inherit;
+      font-weight: 700;
+      white-space: nowrap;
+      padding: 7px 8px;
+      border-radius: 8px;
+      cursor: pointer;
     }
+    .launcher .l-menu .l-chip:hover { background: #10b981; color: #04150f; }
+    /* vertical divider inside the row */
     .launcher .l-sep {
-      height: 1px;
+      width: 1px;
+      align-self: stretch;
+      min-height: 20px;
       background: #343b4a;
-      margin: 2px 4px;
+      margin: 0 3px;
     }
     /* × close button — corner of the dock, revealed on hover/open */
     .l-close {
@@ -217,7 +246,7 @@
   };
 
   function maybeShow() {
-    if (!enabled) return hide();
+    if (!enabled || selecting) return hide();
     const sel = window.getSelection();
     const text = sel && !sel.isCollapsed ? String(sel).trim() : "";
     if (!text) return hide();
@@ -298,6 +327,87 @@
     return t || currentText;
   }
 
+  // Inline SVGs (stroke uses currentColor so hover recolours them).
+  const SVG = (paths) =>
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ` +
+    `stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  const ICON = {
+    camera: SVG(
+      `<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-3h8l2 3h3a2 2 0 0 1 2 2z"/>` +
+        `<circle cx="12" cy="13" r="3.5"/>`
+    ),
+    region: SVG(
+      `<path stroke-dasharray="3 2.4" d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2` +
+        `M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M12 9v6M9 12h6"/>`
+    ),
+    ocr: SVG(
+      `<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>` +
+        `<text x="12" y="14.5" font-size="7" font-weight="800" text-anchor="middle" ` +
+        `fill="currentColor" stroke="none">OCR</text>`
+    ),
+  };
+
+  // Region selection drawn *in the page* by this content script — no injection,
+  // so it always appears. Resolves {x,y,width,height,dpr} or null (Esc / tiny).
+  let selecting = false;
+  function selectRegion() {
+    return new Promise((resolve) => {
+      selecting = true;
+      const Z = 2147483647;
+      const ov = document.createElement("div");
+      ov.style.cssText = `position:fixed;inset:0;z-index:${Z};cursor:crosshair;background:rgba(0,0,0,.25);`;
+      const box = document.createElement("div");
+      box.style.cssText =
+        `position:fixed;border:2px solid #10b981;background:rgba(16,185,129,.15);display:none;z-index:${Z};pointer-events:none;`;
+      ov.appendChild(box);
+      let sx = 0,
+        sy = 0,
+        drag = false;
+      const finish = (rect) => {
+        ov.remove();
+        document.removeEventListener("keydown", onKey, true);
+        selecting = false;
+        resolve(rect);
+      };
+      const onKey = (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          finish(null);
+        }
+      };
+      const upd = (e) => {
+        const x = Math.min(sx, e.clientX),
+          y = Math.min(sy, e.clientY);
+        box.style.left = x + "px";
+        box.style.top = y + "px";
+        box.style.width = Math.abs(e.clientX - sx) + "px";
+        box.style.height = Math.abs(e.clientY - sy) + "px";
+      };
+      ov.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        drag = true;
+        sx = e.clientX;
+        sy = e.clientY;
+        box.style.display = "block";
+        upd(e);
+      });
+      ov.addEventListener("mousemove", (e) => drag && upd(e));
+      ov.addEventListener("mouseup", (e) => {
+        if (!drag) return;
+        e.stopPropagation();
+        const x = Math.min(sx, e.clientX),
+          y = Math.min(sy, e.clientY),
+          w = Math.abs(e.clientX - sx),
+          h = Math.abs(e.clientY - sy);
+        if (w < 4 || h < 4) return finish(null);
+        finish({ x, y, width: w, height: h, dpr: window.devicePixelRatio || 1 });
+      });
+      document.addEventListener("keydown", onKey, true);
+      document.documentElement.appendChild(ov);
+    });
+  }
+
   const launcher = document.createElement("div");
   launcher.className = "launcher";
   launcher.hidden = true; // corrected by applyEnabled() once storage loads
@@ -326,13 +436,14 @@
     const menu = document.createElement("div");
     menu.className = "l-menu";
     const items = [
-      { kind: "fmt", format: "h1", label: "H1" },
-      { kind: "fmt", format: "h2", label: "H2" },
-      { kind: "fmt", format: "list", label: "≔ List" },
-      { kind: "fmt", format: "p", label: "¶ Paragraph" },
+      { kind: "icon", mode: "visible", title: "Screenshot the visible page", svg: ICON.camera },
+      { kind: "icon", mode: "region", title: "Screenshot a selected region", svg: ICON.region },
+      { kind: "icon", mode: "ocr", title: "Grab text from a region (OCR → paragraph)", svg: ICON.ocr },
       { kind: "sep" },
-      { kind: "shot", mode: "region", label: "⬚ Screenshot region" },
-      { kind: "shot", mode: "visible", label: "🖼 Screenshot page" },
+      { kind: "chip", format: "h1", label: "H1", title: "Save selection as Heading 1" },
+      { kind: "chip", format: "h2", label: "H2", title: "Save selection as Heading 2" },
+      { kind: "chip", format: "list", label: "≔", title: "Save selection as a bullet list" },
+      { kind: "chip", format: "p", label: "¶", title: "Save selection as a paragraph" },
     ];
     for (const it of items) {
       if (it.kind === "sep") {
@@ -342,17 +453,27 @@
         continue;
       }
       const btn = document.createElement("button");
-      if (it.kind === "fmt") btn.dataset.format = it.format;
-      else btn.dataset.mode = it.mode;
-      btn.textContent = it.label;
+      btn.title = it.title;
+      if (it.kind === "icon") {
+        btn.className = "l-btn";
+        btn.dataset.mode = it.mode;
+        btn.innerHTML = it.svg;
+      } else {
+        btn.className = "l-chip";
+        btn.dataset.format = it.format;
+        btn.textContent = it.label;
+      }
       menu.appendChild(btn);
     }
 
     const icon = document.createElement("span");
     icon.className = "l-icon";
     icon.title = "Dumpster — drag to move · hover for options";
+    const logo = document.createElement("span");
+    logo.className = "l-logo";
+    icon.appendChild(logo);
 
-    // close + hide popover, then menu (expands leftward), then edge icon
+    // close + hide popover, then menu (expands leftward), then edge handle
     launcher.append(close, hideMenu, menu, icon);
   }
   renderLauncher();
@@ -381,14 +502,24 @@
     );
   }
 
-  function takeShot(mode) {
-    // Hide our whole UI so the dock/pill aren't in the capture, then shoot.
+  async function takeShot(mode) {
+    // Hide our whole UI so the dock/pill aren't in the capture.
     host.style.visibility = "hidden";
+    // region + ocr let the user drag a rectangle first (drawn in-page here, so
+    // it never depends on activeTab-gated injection).
+    let rect = null;
+    if (mode === "region" || mode === "ocr") {
+      rect = await selectRegion();
+      if (!rect) {
+        host.style.visibility = ""; // cancelled — nothing captured
+        return;
+      }
+    }
     setTimeout(() => {
-      chrome.runtime.sendMessage({ type: "dumpster-shot", mode }, (res) => {
+      chrome.runtime.sendMessage({ type: "dumpster-shot", mode, rect }, (res) => {
         host.style.visibility = "";
         if (chrome.runtime.lastError) return launcherNote("Reloaded — try again");
-        if (res?.cancelled) return; // region selection cancelled
+        if (res?.cancelled) return;
         launcherNote(res?.ok ? `✓ Saved to ${res.bucketName}` : res?.error || "Failed");
       });
     }, 60);
