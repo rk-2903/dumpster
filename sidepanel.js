@@ -19,6 +19,7 @@ import { addEntry, makeEntry, putImage } from "./src/db.js";
 import { enqueueUpsert } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
+import { track, pingActive, flush } from "./src/telemetry.js";
 
 const els = {
   bucket: document.getElementById("bucket"),
@@ -35,6 +36,8 @@ const els = {
 
 async function init() {
   await ensureSeeded();
+  pingActive(); // opening the study panel counts as active-today
+  flush();
   await refreshBuckets();
 
   els.newBucket.addEventListener("click", onNewBucket);
@@ -107,6 +110,7 @@ async function saveEntry({ content, blob }) {
   await signalDump();
   await enqueueUpsert(entry.id);
   addSessionItem(entry, blob);
+  track("feature", { name: blob ? "panel-screenshot" : "panel-note" });
   return entry;
 }
 

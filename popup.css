@@ -338,3 +338,39 @@ body {
 .setting-toggle input {
   accent-color: var(--accent);
 }
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 14px 12px;
+  padding: 9px 11px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.notice[hidden] {
+  display: none;
+}
+.notice b {
+  color: var(--text);
+}
+.notice-x {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.notice-x:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

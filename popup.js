@@ -9,7 +9,7 @@ import {
 import { addEntries, makeEntry, putImage } from "./src/db.js";
 import { enqueueUpsertMany } from "./src/outbox.js";
 import { captureVisible } from "./src/capture.js";
-import { track, pingActive, flush } from "./src/telemetry.js";
+import { track, pingActive, flush, initUninstallUrl } from "./src/telemetry.js";
 
 const els = {
   bucket: document.getElementById("bucket"),
@@ -24,6 +24,9 @@ const els = {
   submit: document.getElementById("submit"),
   openViewer: document.getElementById("open-viewer"),
   selectionHelper: document.getElementById("selection-helper"),
+  telemetry: document.getElementById("telemetry-toggle"),
+  telemetryNotice: document.getElementById("telemetry-notice"),
+  telemetryDismiss: document.getElementById("telemetry-dismiss"),
   toast: document.getElementById("toast"),
 };
 
@@ -105,6 +108,26 @@ async function init() {
     if (on) injectSelectionHelper(); // activate immediately on this tab
     // Turning off: the already-injected script self-disables via the storage
     // change; no re-injection until re-enabled.
+  });
+
+  wireTelemetryControls();
+}
+
+// Anonymous-usage opt-out toggle + one-time first-run notice.
+function wireTelemetryControls() {
+  chrome.storage.local.get(["telemetryEnabled", "telemetryNoticeSeen"], (o) => {
+    els.telemetry.checked = o.telemetryEnabled !== false; // default on
+    // Show the disclosure once, only while telemetry is on.
+    els.telemetryNotice.hidden = o.telemetryNoticeSeen === true || o.telemetryEnabled === false;
+  });
+  els.telemetry.addEventListener("change", () => {
+    chrome.storage.local.set({ telemetryEnabled: els.telemetry.checked });
+    initUninstallUrl(); // set or clear the uninstall ping to match the choice
+    if (!els.telemetry.checked) els.telemetryNotice.hidden = true;
+  });
+  els.telemetryDismiss.addEventListener("click", () => {
+    chrome.storage.local.set({ telemetryNoticeSeen: true });
+    els.telemetryNotice.hidden = true;
   });
 }
 
