@@ -66,8 +66,15 @@ you meant to come back to.
   own Google Docs. See below.
 
 Data lives in the browser (IndexedDB + `chrome.storage.local`, with persistent
-storage requested so it isn't evicted). Nothing leaves your machine unless you
-connect Google — and then it goes only to your own Drive.
+storage requested so it isn't evicted). Your **content** never leaves your
+machine unless you connect Google — and then it goes only to your own Drive.
+
+- **Anonymous usage stats (opt-out)** — to see how many people use Dumpster and
+  which features matter, it sends **anonymous** event counts (a random id,
+  event names like `install`/`active`/`feature`/`error`, version, locale) to the
+  developer's Supabase backend. Never your dumps, selections, screenshots, page
+  URLs, or Google data. Toggle it off in the popup or the Cloud sync dialog. The
+  backend (schema + edge functions you self-host) lives in [`supabase/`](supabase/).
 
 ## Install (unpacked, for development)
 
@@ -89,6 +96,7 @@ Reload the extension from that page after any code change.
 | `src/outbox.js` | Durable, coalescing sync op queue (no-ops while disconnected) |
 | `src/sync.js` | Sync orchestrator — routes ops to the provider matching each bucket's kind |
 | `src/googleAuth.js` | `chrome.identity` connect/disconnect/token wrapper |
+| `src/telemetry.js` | Anonymous, opt-out usage telemetry (durable batched sender) |
 | `src/sheetsSync.js` | Sheets provider — tab per bucket, row per dump keyed by entry id |
 | `src/docsSync.js` | Docs provider — doc per bucket, date headings, named-range keyed blocks |
 | `popup.html/.css/.js` | Toolbar popup with batch staging |
@@ -96,6 +104,7 @@ Reload the extension from that page after any code change.
 | `newbucket.html/.js` | Fallback naming window for the context-menu New bucket flow |
 | `scripts/package.sh` | Builds the Chrome Web Store zip (`dist/`) |
 | `docs/` | Publishing guide + privacy policy draft |
+| `supabase/` | Telemetry backend — schema, edge functions, deploy guide (self-hosted) |
 | `vendor/` | SheetJS (lazy-loaded for Excel import/export) |
 | `icons/` | Generated PNG icons |
 
