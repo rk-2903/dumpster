@@ -10,8 +10,10 @@ you meant to come back to.
   - **Sheet buckets** — trackers. Each dump has a **Status**
     (`To Do` → `In Process` → `Done`) and **Notes**; view as a table or a
     **Kanban board** and drag cards between columns to change status.
-  - **Doc buckets** — documentation. No workflow status, just the content with
-    source and notes.
+  - **Doc buckets** — documentation. No workflow status. In the viewer they
+    default to a **Document** view (toggle to List to edit): entries render as a
+    flowing document — date sections, H1/H2/list/paragraph, inline screenshots,
+    and a **References** section at the bottom listing the unique source links.
 - **Three ways to dump:**
   - **Popup** (toolbar icon): pick a bucket (grouped Sheets/Docs), paste,
     optionally *Add another* to stack several, then *Dump*.
@@ -20,6 +22,31 @@ you meant to come back to.
   - **Right-click → … → ＋ New bucket…** — names the bucket via a prompt right
     on the page you're on and files the dump into it in one go (a small naming
     window appears only on pages Chrome can't inject into, e.g. `chrome://`).
+- **Study capture (Doc buckets)** — built for researching with a page open:
+  - **Screenshots**: from the popup (📸 button), right-click → **Screenshot to**
+    (visible area or **drag-a-region**), or **Alt+Shift+S** straight to your
+    last-used Doc bucket. Thumbnails show in the viewer (click for full size),
+    and synced screenshots appear **inside the bucket's Google Doc**, sized to
+    fit.
+  - **Study side panel** (right-click the toolbar icon → *Open study panel*): a
+    notebook pinned beside the page — pick a Doc bucket, type notes, snap
+    screenshots, see this session's captures.
+  - **OCR**: synced screenshots get their text extracted (via Drive's free OCR)
+    so the bucket filter can find words *inside* your screenshots.
+  - **Page helper** (current tab, activated by opening the Dumpster popup —
+    injected on demand, never running on other tabs in the background; toggle it
+    off in the popup):
+    - a **floating dock** on the right edge you can **drag up/down** (its
+      position is remembered). Hover to expand its toolbar: a **📷 page**
+      screenshot, a **⬚ region** screenshot (drag a rectangle right on the page),
+      an **OCR** grab (drag a region → its text is extracted and added as a
+      paragraph — needs Google connected), and **H1 / H2 / ≔ / ¶** chips that
+      save the current selection to your last-used Doc bucket. Its **×** menu
+      hides the dock **until next visit**, **on this domain**, or **on all
+      websites** (re-enable from the popup toggle);
+    - a **selection menu**: select text and a small pill appears —
+      **H1 / H2 / list / ¶** — click one to save that text to your last-used Doc
+      bucket, formatted as a real Heading 1/2, bullet, or paragraph in the Doc.
 - **Auto-captured context** — every dump records a timestamp plus the page URL
   and title it came from, so even a bare note remembers where you were.
 - **Append-only** — dumps only ever add rows; nothing is overwritten. The dumped
@@ -82,7 +109,10 @@ are live at once, routed by each bucket's type:
 - **Doc buckets** — each bucket gets its own Google Doc (bucket name as the
   doc's title heading), entries grouped under date headings as a content line
   plus a source · notes meta line. Edits and deletes locate their block via Docs
-  named ranges keyed by entry id.
+  named ranges keyed by entry id. **Screenshots are embedded inline**: the Docs
+  API can only ingest publicly reachable images, so each screenshot is uploaded
+  to your Drive, made link-visible for a few seconds while Docs copies it into
+  the document, then deleted (the local copy remains the source of truth).
 
 Connecting (an official-style **Connect Google** button in the Cloud modal)
 backfills everything already in Dumpster, oldest-first. The Cloud chip shows
@@ -127,8 +157,6 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 
 ## Roadmap (Phase 2)
 
-- **Screenshots + OCR in the Docs target** — inline screenshots
-  (`insertInlineImage`) and Drive OCR on top of the shipped Docs provider.
 - **Convert bucket type** — switch an existing bucket between Sheet and Doc
   (with its synced data migrated to the new destination).
 - **Paywall / subscriptions** — gate premium features (e.g. Excel import/export,

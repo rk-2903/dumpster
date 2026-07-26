@@ -10,8 +10,12 @@
     "identity",
     "alarms",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "sidePanel"
   ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "host_permissions": [
     "https://sheets.googleapis.com/",
     "https://docs.googleapis.com/",
@@ -24,6 +28,14 @@
     "scopes": [
       "https://www.googleapis.com/auth/drive.file"
     ]
+  },
+  "commands": {
+    "screenshot-to-doc": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Screenshot the visible page into your last-used Doc bucket"
+    }
   },
   "background": {
     "service_worker": "src/background.js",

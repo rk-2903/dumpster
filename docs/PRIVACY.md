@@ -10,6 +10,16 @@ and stays on your device unless *you* connect your own Google account.
 
 - **Content you save ("dumps")** — the text or links you choose to save, the
   bucket you file them under, and any status or notes you add.
+- **Screenshots you take** — captured only when you explicitly use a screenshot
+  action (popup button, right-click menu, keyboard shortcut, or study panel),
+  and stored on your device.
+- **Text you select** — the optional selection helper is injected only into the
+  current tab, on demand (when you open the Dumpster popup), never into your
+  other tabs or in the background. It shows a floating pill when you select
+  text, and reads **only the text you selected, and only at the moment you click
+  one of its buttons** (H1/H2/list/paragraph) to save it. It does not read,
+  collect, or transmit anything else from the page, and you can turn it off from
+  the popup.
 - **Page context** — when you save from a page, the current tab's URL and title
   are attached to that dump so you remember where it came from.
 
@@ -22,11 +32,18 @@ advertising. It never reads your browsing history.
   (IndexedDB and Chrome extension storage). It is not transmitted to the
   developer or to any third party.
 - **Optionally, in your own Google Drive.** If you choose to connect your
-  Google account, Dumpster mirrors your dumps into a spreadsheet **in your own
-  Google Drive**, using Google's narrow `drive.file` permission — which only
-  allows access to files this extension itself creates. Dumpster cannot see the
-  rest of your Drive, and your data still never touches the developer's servers
-  (there are none).
+  Google account, Dumpster mirrors your dumps into a spreadsheet and/or Google
+  Docs **in your own Google Drive**, using Google's narrow `drive.file`
+  permission — which only allows access to files this extension itself creates.
+  Dumpster cannot see the rest of your Drive, and your data still never touches
+  the developer's servers (there are none).
+- **Screenshot sync detail.** Google's Docs API can only ingest images from a
+  reachable URL. When a screenshot syncs into one of your Docs, Dumpster
+  uploads it to your Drive, makes that single file link-visible (an unguessable
+  address) for the few seconds Google needs to copy it into the document, then
+  deletes the temporary file. Screenshot text extraction (search inside your
+  screenshots) uses Drive's built-in OCR: a temporary converted document is
+  created in your Drive and deleted immediately after the text is read.
 
 ## What Dumpster never does
 
@@ -52,7 +69,8 @@ transferred to third parties, and is not used for advertising.
 | Tabs | Attach the current page's URL/title to a dump you save. |
 | Identity | Only if you connect Google: sign-in for cloud sync. |
 | Alarms | Retry cloud-sync writes in the background if you're offline. |
-| Scripting (active tab only) | Show the "name your new bucket" prompt on the page when you use the right-click menu. Nothing is read from the page. |
+| Scripting (active tab only) | Show the "name your new bucket" prompt and the drag-a-region screenshot overlay on the current page. Nothing is read from the page. |
+| Side panel | The optional study panel you can pin beside a page. |
 | googleapis.com access | Only if you connect Google: write to your own Sheet. |
 
 ## Deleting your data

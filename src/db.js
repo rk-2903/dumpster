@@ -4,8 +4,9 @@
 // entries can be deleted individually or with their bucket.
 
 const DB_NAME = "dumpster";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2 adds the images store (screenshot blobs keyed by entry id)
 const STORE = "entries";
+const IMAGES = "images";
 
 let dbPromise = null;
 
@@ -24,6 +25,9 @@ function openDB() {
         store.createIndex("bucketId", "bucketId", { unique: false });
         store.createIndex("createdAt", "createdAt", { unique: false });
       }
+      if (!db.objectStoreNames.contains(IMAGES)) {
+        db.createObjectStore(IMAGES); // key = entry id, value = PNG Blob
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -31,8 +35,8 @@ function openDB() {
   return dbPromise;
 }
 
-function tx(mode) {
-  return openDB().then((db) => db.transaction(STORE, mode).objectStore(STORE));
+function tx(mode, storeName = STORE) {
+  return openDB().then((db) => db.transaction(storeName, mode).objectStore(storeName));
 }
 
 function reqToPromise(request) {
@@ -105,6 +109,7 @@ export async function updateEntry(id, patch) {
 export async function deleteEntry(id) {
   const store = await tx("readwrite");
   await reqToPromise(store.delete(id));
+  await deleteImage(id); // cascade: a deleted entry's screenshot goes with it
 }
 
 export async function deleteEntriesByBucket(bucketId) {
@@ -112,4 +117,22 @@ export async function deleteEntriesByBucket(bucketId) {
   const index = store.index("bucketId");
   const keys = await reqToPromise(index.getAllKeys(IDBKeyRange.only(bucketId)));
   await Promise.all(keys.map((k) => reqToPromise(store.delete(k))));
+  await Promise.all(keys.map((k) => deleteImage(k)));
+}
+
+// ---- Screenshot blobs (images store; key = entry id) ----
+
+export async function putImage(entryId, blob) {
+  const store = await tx("readwrite", IMAGES);
+  await reqToPromise(store.put(blob, entryId));
+}
+
+export async function getImage(entryId) {
+  const store = await tx("readonly", IMAGES);
+  return reqToPromise(store.get(entryId));
+}
+
+export async function deleteImage(entryId) {
+  const store = await tx("readwrite", IMAGES);
+  await reqToPromise(store.delete(entryId));
 }
