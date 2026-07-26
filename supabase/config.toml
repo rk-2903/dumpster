@@ -1,0 +1,7 @@
+project_id = "znerazqhztkqperaqgaw"
+
+# ingest keeps verify_jwt = true (default): the extension sends the anon key as
+# a bearer token. uninstall is opened by the browser with no auth header, so it
+# must skip JWT verification.
+[functions.uninstall]
+verify_jwt = false
