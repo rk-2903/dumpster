@@ -12,6 +12,7 @@ import { captureVisible } from "./src/capture.js";
 
 const els = {
   bucket: document.getElementById("bucket"),
+  kindTabs: [...document.querySelectorAll(".kind-tab")],
   newBucket: document.getElementById("new-bucket"),
   content: document.getElementById("content"),
   attach: document.getElementById("attach-page"),
@@ -30,9 +31,24 @@ const els = {
 let staged = [];
 let currentTab = null;
 let buckets = [];
+// Which bucket type the popup is showing — Sheet and Doc are kept on separate
+// tabs so the two never mix. Persisted as `popupKind`.
+let activeKind = "sheet";
+
+function getStored(key) {
+  return new Promise((r) => chrome.storage.local.get(key, (o) => r(o[key])));
+}
 
 async function init() {
   await ensureSeeded();
+
+  // Open on the tab the user last used (an explicit tab switch, or the kind of
+  // their last-dumped bucket), falling back to Sheet.
+  buckets = await getBuckets();
+  const storedKind = await getStored("popupKind");
+  const lastId = await getLastBucketId();
+  const lastKind = buckets.find((b) => b.id === lastId)?.kind;
+  activeKind = storedKind || lastKind || "sheet";
   await refreshBuckets();
 
   currentTab = await getActiveTab();
@@ -44,10 +60,12 @@ async function init() {
     els.attach.parentElement.hidden = true;
   }
 
+  els.kindTabs.forEach((t) => t.addEventListener("click", () => switchKind(t.dataset.kind)));
   els.newBucket.addEventListener("click", onNewBucket);
   els.bucket.addEventListener("change", () => {
-    setLastBucketId(els.bucket.value);
+    if (els.bucket.value) setLastBucketId(els.bucket.value);
     updateShotState();
+    updateSubmitState();
   });
   els.shot.addEventListener("click", onScreenshot);
   els.addMore.addEventListener("click", onAddMore);
@@ -101,49 +119,67 @@ function getActiveTab() {
   );
 }
 
-function selectedBucket() {
-  return buckets.find((b) => b.id === els.bucket.value);
+function updateTabs() {
+  els.kindTabs.forEach((t) =>
+    t.setAttribute("aria-selected", String(t.dataset.kind === activeKind))
+  );
 }
 
 // Screenshots are a Doc-bucket feature (sheets have no place to show them).
 function updateShotState() {
-  const isDoc = selectedBucket()?.kind === "doc";
-  els.shot.disabled = !isDoc;
-  els.shot.title = isDoc
+  const canShoot = activeKind === "doc" && !!els.bucket.value;
+  els.shot.disabled = !canShoot;
+  els.shot.title = canShoot
     ? "Screenshot the visible page into this Doc bucket"
-    : "Screenshots go to Doc buckets — pick one to enable";
+    : activeKind === "doc"
+      ? "Create a Doc bucket first (click ＋)"
+      : "Screenshots go to Doc buckets — switch to the Doc tab";
 }
 
+async function switchKind(kind) {
+  if (!kind || kind === activeKind) return;
+  activeKind = kind;
+  chrome.storage.local.set({ popupKind: kind });
+  await refreshBuckets();
+  if (els.bucket.value) setLastBucketId(els.bucket.value);
+  els.content.focus();
+}
+
+// Populate the select with only the active kind's buckets; keep the previous
+// selection if it belongs to this kind, else the last-used one, else the first.
 async function refreshBuckets(selectId) {
   buckets = await getBuckets();
-  const chosen = selectId || (await getLastBucketId());
+  const last = await getLastBucketId();
+  const inKind = buckets.filter((b) => b.kind === activeKind);
   els.bucket.innerHTML = "";
-  for (const group of [
-    { kind: "sheet", label: "Sheets" },
-    { kind: "doc", label: "Docs" },
-  ]) {
-    const inGroup = buckets.filter((b) => b.kind === group.kind);
-    if (!inGroup.length) continue;
-    const og = document.createElement("optgroup");
-    og.label = group.label;
-    for (const b of inGroup) {
+  if (!inKind.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.disabled = true;
+    opt.textContent = `No ${activeKind === "doc" ? "Doc" : "Sheet"} buckets yet — click ＋`;
+    els.bucket.appendChild(opt);
+    els.bucket.value = "";
+  } else {
+    for (const b of inKind) {
       const opt = document.createElement("option");
       opt.value = b.id;
       opt.textContent = b.name;
-      og.appendChild(opt);
+      els.bucket.appendChild(opt);
     }
-    els.bucket.appendChild(og);
+    const pick = [selectId, last].find((id) => inKind.some((b) => b.id === id)) || inKind[0].id;
+    els.bucket.value = pick;
   }
-  if (chosen) els.bucket.value = chosen;
+  updateTabs();
+  updateShotState();
+  updateSubmitState();
 }
 
 async function onNewBucket() {
-  const name = prompt("Name your new bucket:");
+  const name = prompt(`Name your new ${activeKind === "doc" ? "Doc" : "Sheet"} bucket:`);
   if (!name || !name.trim()) return;
-  const bucket = await addBucket(name.trim());
+  const bucket = await addBucket(name.trim(), activeKind);
   await setLastBucketId(bucket.id);
   await refreshBuckets(bucket.id);
-  updateShotState();
   els.content.focus();
 }
 
@@ -219,7 +255,7 @@ function pendingItems() {
 
 function updateSubmitState() {
   const n = pendingItems().length;
-  els.submit.disabled = n === 0;
+  els.submit.disabled = n === 0 || !els.bucket.value;
   els.submit.textContent = n > 1 ? `Dump ${n}` : "Dump";
 }
 
@@ -228,6 +264,8 @@ async function onSubmit() {
   if (!items.length) return;
 
   const bucketId = els.bucket.value;
+  if (!bucketId) return;
+  chrome.storage.local.set({ popupKind: activeKind }); // reopen on this tab
   const source =
     els.attach.checked && currentTab
       ? { sourceUrl: currentTab.url || "", sourceTitle: currentTab.title || "" }

@@ -15,8 +15,9 @@ you meant to come back to.
     flowing document — date sections, H1/H2/list/paragraph, inline screenshots,
     and a **References** section at the bottom listing the unique source links.
 - **Three ways to dump:**
-  - **Popup** (toolbar icon): pick a bucket (grouped Sheets/Docs), paste,
-    optionally *Add another* to stack several, then *Dump*.
+  - **Popup** (toolbar icon): a **Sheet / Doc** tab keeps the two bucket types
+    separate — pick the tab, pick a bucket, paste, optionally *Add another* to
+    stack several, then *Dump*. (Screenshots enable on the Doc tab.)
   - **Right-click → Dump to → Sheet / Doc → [bucket]** — dumps the selected
     text, a link, an image, or the current page in one gesture.
   - **Right-click → … → ＋ New bucket…** — names the bucket via a prompt right

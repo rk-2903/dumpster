@@ -439,12 +439,7 @@
       { kind: "icon", mode: "visible", title: "Screenshot the visible page", svg: ICON.camera },
       { kind: "icon", mode: "region", title: "Screenshot a selected region", svg: ICON.region },
       { kind: "icon", mode: "ocr", title: "Grab text from a region (OCR → paragraph)", svg: ICON.ocr },
-      { kind: "sep" },
-      { kind: "chip", format: "h1", label: "H1", title: "Save selection as Heading 1" },
-      { kind: "chip", format: "h2", label: "H2", title: "Save selection as Heading 2" },
-      { kind: "chip", format: "list", label: "≔", title: "Save selection as a bullet list" },
-      { kind: "chip", format: "p", label: "¶", title: "Save selection as a paragraph" },
-    ];
+     ];
     for (const it of items) {
       if (it.kind === "sep") {
         const s = document.createElement("div");

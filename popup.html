@@ -17,6 +17,10 @@
 
     <main class="panel">
       <label class="field-label" for="bucket">Bucket</label>
+      <div class="kind-tabs" role="tablist" aria-label="Bucket type">
+        <button class="kind-tab" data-kind="sheet" role="tab" type="button">Sheet</button>
+        <button class="kind-tab" data-kind="doc" role="tab" type="button">Doc</button>
+      </div>
       <div class="bucket-row">
         <select id="bucket" class="bucket-select"></select>
         <button id="new-bucket" class="ghost-btn" title="Create a new bucket">＋</button>
