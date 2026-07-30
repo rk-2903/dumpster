@@ -1,7 +1,13 @@
 project_id = "znerazqhztkqperaqgaw"
 
-# ingest keeps verify_jwt = true (default): the extension sends the anon key as
-# a bearer token. uninstall is opened by the browser with no auth header, so it
-# must skip JWT verification.
+# Both functions are called from a browser context (the extension / an opened
+# tab), so JWT verification must be OFF. With verify_jwt = true, Supabase's
+# gateway 401s the CORS *preflight* OPTIONS (which carries no Authorization
+# header) before our function runs, and the browser blocks the request. The
+# public anon key was never real protection anyway — payload validation in the
+# function plus the RLS-locked `events` table are what guard the data.
+[functions.ingest]
+verify_jwt = false
+
 [functions.uninstall]
 verify_jwt = false

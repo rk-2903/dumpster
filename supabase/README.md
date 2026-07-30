@@ -15,7 +15,7 @@ locale. Never the content of your dumps, page URLs, or any Google data.
 | `migrations/0001_events.sql` | `events` table (RLS locked, no anon access) + read views |
 | `functions/ingest/` | Validates + inserts event batches (service role) |
 | `functions/uninstall/` | Logs an uninstall + shows a thank-you page |
-| `config.toml` | Marks `uninstall` as `verify_jwt = false` |
+| `config.toml` | Marks both functions as `verify_jwt = false` (browser CORS) |
 
 ## Deploy (manual)
 
@@ -30,10 +30,19 @@ supabase link --project-ref znerazqhztkqperaqgaw
 supabase db push          # applies supabase/migrations/*.sql
 # ...or: copy migrations/0001_events.sql into Dashboard → SQL editor → Run
 
-# 2) edge functions
-supabase functions deploy ingest
+# 2) edge functions — BOTH must skip JWT verification (see note below)
+supabase functions deploy ingest --no-verify-jwt
 supabase functions deploy uninstall --no-verify-jwt
 ```
+
+> **Why `--no-verify-jwt`?** Both functions are called from a browser. With JWT
+> verification on (the default), Supabase's gateway rejects the CORS **preflight
+> `OPTIONS`** request — which carries no `Authorization` header — with a `401`,
+> so the browser blocks the call with *"preflight … does not have HTTP ok
+> status."* The anon key is public anyway; the real guards are the payload
+> validation in `ingest` and the RLS-locked `events` table. (`config.toml` sets
+> `verify_jwt = false` for both, so a CLI deploy picks it up even without the
+> flag — but pass it explicitly to be safe.)
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected into functions
 automatically — you don't set any secrets.

@@ -5,8 +5,10 @@
 // validated and whitelisted here; anything unexpected is dropped, so a caller
 // holding the public anon key still can't write arbitrary data.
 //
-// Deploy: supabase functions deploy ingest
-// (verify_jwt stays true — the extension sends the anon key as a bearer token.)
+// Deploy: supabase functions deploy ingest --no-verify-jwt
+// verify_jwt MUST be off: the browser's CORS preflight (OPTIONS) carries no
+// Authorization header, so with JWT on the gateway 401s the preflight before
+// this code runs. Payload validation here + the RLS-locked table are the guard.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -25,8 +27,9 @@ const UUID_RE =
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400", // cache the preflight for a day
 };
 
 function short(v: unknown): string | undefined {
