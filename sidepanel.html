@@ -81,6 +81,16 @@
         font-style: italic;
         font-weight: 600;
       }
+      .fmt-btn.fmt-ocr {
+        width: auto;
+        padding: 0 7px;
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        border: 1px dashed var(--border);
+      }
+      .fmt-btn.fmt-ocr:hover {
+        border-color: var(--accent);
+      }
       .fmt-sep {
         width: 1px;
         align-self: stretch;
@@ -299,6 +309,9 @@
         <span class="fmt-sep"></span>
         <button id="fmt-ul" class="fmt-btn" title="Bullet list">≔</button>
         <button id="fmt-ol" class="fmt-btn" title="Numbered list">1.</button>
+        <span class="fmt-sep"></span>
+        <button id="cap-region" class="fmt-btn" title="Screenshot a region of the page → end of doc">⬚</button>
+        <button id="cap-ocr" class="fmt-btn fmt-ocr" title="Grab text from a region (OCR) → end of doc">OCR</button>
         <div class="mode-tabs" role="tablist">
           <button id="mode-write" class="mode-tab" role="tab">Write</button>
           <button id="mode-preview" class="mode-tab" role="tab">Preview</button>

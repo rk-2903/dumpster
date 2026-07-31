@@ -16,6 +16,10 @@
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
 import { addEntry, makeEntry, putImage, getImage } from "./src/db.js";
 import { enqueueUpsert } from "./src/outbox.js";
+import { captureVisible, cropBlob } from "./src/capture.js";
+import { regionSelectOverlay } from "./src/regionSelect.js";
+import { getToken, getConnection } from "./src/googleAuth.js";
+import { createDocsProvider } from "./src/docsSync.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
 import { renderMarkdown } from "./src/markdown.js";
 import { getBody, setBody, ingestNewEntries, seedIfEmpty } from "./src/docBody.js";
@@ -34,6 +38,8 @@ const els = {
   modePreview: document.getElementById("mode-preview"),
   editor: document.getElementById("editor"),
   preview: document.getElementById("preview"),
+  capRegion: document.getElementById("cap-region"),
+  capOcr: document.getElementById("cap-ocr"),
   shareDoc: document.getElementById("share-doc"),
   openDoc: document.getElementById("open-doc"),
   saveState: document.getElementById("save-state"),
@@ -81,6 +87,8 @@ async function init() {
     }, 500);
   });
 
+  els.capRegion.addEventListener("click", () => onRegionCapture("shot"));
+  els.capOcr.addEventListener("click", () => onRegionCapture("ocr"));
   els.shareDoc.addEventListener("click", onShareDoc);
   els.openDoc.addEventListener("click", onOpenDoc);
 
@@ -195,6 +203,8 @@ async function refreshBuckets(selectId) {
   els.editor.disabled = none;
   els.shareDoc.disabled = none;
   els.openDoc.disabled = none;
+  els.capRegion.disabled = none;
+  els.capOcr.disabled = none;
   if (chosen) {
     els.bucket.value = chosen;
     if (chosen !== activeBucket) await switchBucket(chosen);
@@ -345,7 +355,7 @@ function getActiveTab() {
   );
 }
 
-async function saveEntry({ content, blob }) {
+async function saveEntry({ content, blob, format }) {
   const bucketId = activeBucket;
   const tab = await getActiveTab();
   const entry = makeEntry({
@@ -354,6 +364,7 @@ async function saveEntry({ content, blob }) {
     sourceUrl: tab?.url || "",
     sourceTitle: tab?.title || "",
   });
+  if (format) entry.format = format;
   if (blob) {
     entry.hasImage = true;
     await putImage(entry.id, blob);
@@ -364,6 +375,46 @@ async function saveEntry({ content, blob }) {
   await enqueueUpsert(entry.id);
   track("feature", { name: blob ? "panel-screenshot" : "panel-note" });
   return entry;
+}
+
+// ---- Toolbar captures: region screenshot / OCR grab ----
+// Draw the drag-rectangle overlay on the page (needs the activeTab grant from
+// the icon click that opened this panel), then either keep the crop as an
+// image entry or OCR it into paragraph text — both land at the end of the doc,
+// exactly like a text selection from the pill.
+async function onRegionCapture(kind) {
+  const tab = await getActiveTab();
+  try {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: regionSelectOverlay,
+    });
+    const rect = res?.result;
+    if (!rect) return; // cancelled (Esc / tiny drag)
+    await new Promise((r) => setTimeout(r, 80)); // let the overlay's removal paint
+    const blob = await captureVisible(tab?.windowId);
+    const crop = await cropBlob(blob, rect, rect.dpr || 1);
+
+    if (kind === "ocr") {
+      const { connected } = await getConnection();
+      if (!connected) return showToast("Connect Google for OCR", true);
+      els.capOcr.disabled = true;
+      try {
+        const text = ((await createDocsProvider({ getToken }).ocrImage(crop).catch(() => "")) || "").trim();
+        if (!text) return showToast("No text found in that region", true);
+        await saveEntry({ content: text, format: "p" });
+        showToast("Text added to the doc ✓");
+      } finally {
+        els.capOcr.disabled = false;
+      }
+      return;
+    }
+    await saveEntry({ content: "", blob: crop }); // image only, no caption
+    showToast("Screenshot added ✓");
+  } catch {
+    // Most likely: no live activeTab grant for this tab (e.g. after navigation).
+    showToast("Chrome needs a gesture — press Alt+Shift+S or use the page dock", true);
+  }
 }
 
 // ---- Share / Open Doc (bottom bar) ----
