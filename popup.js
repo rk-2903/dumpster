@@ -119,8 +119,20 @@ async function injectSelectionHelper() {
 }
 
 function getActiveTab() {
+  // As the action popup, the current window is the browsing window. Opened as
+  // a standalone "Quick dump" window (?window=1), the current window is the
+  // popup itself — resolve the last-focused normal window's active tab instead.
+  const windowed = new URLSearchParams(location.search).has("window");
+  if (!windowed) {
+    return new Promise((resolve) =>
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs[0] || null))
+    );
+  }
   return new Promise((resolve) =>
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs[0] || null))
+    chrome.windows.getLastFocused({ windowTypes: ["normal"] }, (win) => {
+      if (!win?.id) return resolve(null);
+      chrome.tabs.query({ active: true, windowId: win.id }, (tabs) => resolve(tabs[0] || null));
+    })
   );
 }
 

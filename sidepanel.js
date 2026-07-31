@@ -91,6 +91,22 @@ async function init() {
     if (changes.buckets) refreshBuckets(els.bucket.value);
     if (changes.dumpSignal) onNewCaptures();
   });
+
+  // The icon click that opened this panel granted activeTab for the current
+  // tab — arm the page helper there (this used to be the popup's job).
+  chrome.storage.local.get("selectionHelper", (o) => {
+    if (o.selectionHelper !== false) injectSelectionHelper();
+  });
+}
+
+async function injectSelectionHelper() {
+  const tab = await getActiveTab();
+  if (!tab?.id) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["src/selectionMenu.js"] });
+  } catch {
+    /* restricted page (chrome://, Web Store) or no grant — helper stays off */
+  }
 }
 
 // ---- Active doc ----

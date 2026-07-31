@@ -80,8 +80,11 @@ async function doRebuildMenus() {
   }
   createItem({ id: "shotnew", parentId: "shot-parent", title: "＋ New Doc bucket…", contexts: CONTEXTS });
 
-  // Right-click the toolbar icon → open the study side panel.
-  createItem({ id: "open-panel", title: "Open study panel", contexts: ["action"] });
+  // Right-click the toolbar icon: the doc panel opens on left-click now, so
+  // the menu carries the popup-style quick dump (multi-item staging, Sheet
+  // notes) as a small window instead.
+  createItem({ id: "open-panel", title: "Open doc panel", contexts: ["action"] });
+  createItem({ id: "quick-dump", title: "Quick dump…", contexts: ["action"] });
 }
 
 // Choose what to dump based on what was right-clicked, preferring the most
@@ -170,6 +173,17 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   // Must run before any await — sidePanel.open needs the live user gesture.
   if (id === "open-panel") {
     chrome.sidePanel.open({ windowId: tab.windowId });
+    return;
+  }
+
+  // The classic capture popup, now reachable from the icon's context menu.
+  if (id === "quick-dump") {
+    chrome.windows.create({
+      url: chrome.runtime.getURL("popup.html?window=1"),
+      type: "popup",
+      width: 384,
+      height: 640,
+    });
     return;
   }
 
@@ -308,6 +322,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   initUninstallUrl();
   flush();
 });
+
+// Clicking the toolbar icon opens the doc side panel directly (no popup —
+// with a default_popup set this behavior would be ignored, so the manifest
+// no longer declares one). The icon click still grants activeTab, which the
+// panel uses to arm the page helper on the current tab.
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((e) => console.warn("[dumpster] panel behavior:", e.message));
 
 // MV3 workers are torn down and restarted; rebuild on wake so the menu survives.
 chrome.runtime.onStartup.addListener(() => {
