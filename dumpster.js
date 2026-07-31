@@ -25,7 +25,7 @@ import {
   enqueueBucketOp,
 } from "./src/outbox.js";
 import { connect as gConnect, disconnect as gDisconnect, getConnection } from "./src/googleAuth.js";
-import { track, pingActive, flush, initUninstallUrl } from "./src/telemetry.js";
+import { track, pingActive, flush } from "./src/telemetry.js";
 
 const els = {
   bucketOpenLink: document.getElementById("bucket-open-link"),
@@ -72,7 +72,6 @@ const els = {
   cloudConnect: document.getElementById("cloud-connect"),
   cloudDisconnect: document.getElementById("cloud-disconnect"),
   cloudDone: document.getElementById("cloud-done"),
-  telemetry: document.getElementById("telemetry-toggle"),
 };
 
 let activeBucketId = null;
@@ -1056,15 +1055,10 @@ function wireCloudModal() {
   });
   els.cloudConnect.addEventListener("click", onConnect);
   els.cloudDisconnect.addEventListener("click", onDisconnect);
-  els.telemetry.addEventListener("change", () => {
-    setSetting("telemetryEnabled", els.telemetry.checked);
-    initUninstallUrl(); // set/clear the uninstall ping to match the choice
-  });
 }
 
 async function openCloudModal() {
   await refreshCloudModal();
-  els.telemetry.checked = (await getSetting("telemetryEnabled")) !== false; // default on
   els.cloudModal.hidden = false;
 }
 function closeCloudModal() {
