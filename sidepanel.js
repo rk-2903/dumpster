@@ -39,6 +39,8 @@ const els = {
   shotVisible: document.getElementById("shot-visible"),
   shotRegion: document.getElementById("shot-region"),
   saveState: document.getElementById("save-state"),
+  dropOverlay: document.getElementById("drop-overlay"),
+  dropLabel: document.getElementById("drop-label"),
   toast: document.getElementById("toast"),
 };
 
@@ -97,6 +99,75 @@ async function init() {
   chrome.storage.local.get("selectionHelper", (o) => {
     if (o.selectionHelper !== false) injectSelectionHelper();
   });
+
+  setupImageDrop();
+}
+
+// ---- Drag an image into the panel → appended at the end of the active doc ----
+// OS file drags carry real bytes and go through the normal screenshot flow.
+// Page-image drags often carry only a URL: we fetch it when the site's CORS
+// allows (the panel has no broad host permissions), else save the link.
+function setupImageDrop() {
+  let depth = 0; // dragenter/leave fire per child; count to know when we truly left
+
+  const looksDroppable = (dt) =>
+    !!dt && ([...(dt.items || [])].some((i) => i.kind === "file") || dt.types?.includes("text/uri-list"));
+
+  document.addEventListener("dragenter", async (e) => {
+    if (!looksDroppable(e.dataTransfer)) return;
+    e.preventDefault();
+    depth++;
+    const docs = (await getBuckets()).filter((b) => b.kind === "doc");
+    const name = docs.find((b) => b.id === activeBucket)?.name;
+    els.dropLabel.textContent = name ? `Drop image to add to “${name}”` : "Create a Doc bucket first";
+    els.dropOverlay.hidden = false;
+  });
+  document.addEventListener("dragover", (e) => {
+    if (!looksDroppable(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  document.addEventListener("dragleave", () => {
+    depth = Math.max(0, depth - 1);
+    if (!depth) els.dropOverlay.hidden = true;
+  });
+  document.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    depth = 0;
+    els.dropOverlay.hidden = true;
+    if (!activeBucket) return showToast("Create a Doc bucket first", true);
+    try {
+      await handleDrop(e.dataTransfer);
+    } catch (err) {
+      showToast(`Drop failed: ${err.message}`, true);
+    }
+  });
+}
+
+async function handleDrop(dt) {
+  // 1) Real files (from the OS, or page drags that include bytes).
+  const files = [...(dt?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (files.length) {
+    for (const f of files) await saveEntry({ content: "", blob: f });
+    showToast(`Added ${files.length === 1 ? "image" : files.length + " images"} to the doc ✓`);
+    return;
+  }
+
+  // 2) URL-only drags (an <img> dragged off a page).
+  const uri = (dt?.getData("text/uri-list") || dt?.getData("text/plain") || "").split("\n")[0].trim();
+  if (!/^https?:\/\//i.test(uri)) return showToast("That didn't contain an image", true);
+  try {
+    const res = await fetch(uri);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) throw new Error("not an image");
+    await saveEntry({ content: "", blob });
+    showToast("Added image to the doc ✓");
+  } catch {
+    // Site blocked the fetch (CORS/hotlinking) — keep the reference instead.
+    await saveEntry({ content: uri });
+    showToast("Image blocked by the site — saved its link instead");
+  }
 }
 
 async function injectSelectionHelper() {

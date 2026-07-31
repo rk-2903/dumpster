@@ -236,6 +236,47 @@
         color: var(--faint);
         white-space: nowrap;
       }
+
+      /* ---- Drag-and-drop image target ---- */
+      .drop-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        backdrop-filter: blur(1.5px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        pointer-events: none; /* drops fall through to the document handlers */
+      }
+      .drop-overlay[hidden] {
+        display: none !important;
+      }
+      .drop-box {
+        width: 100%;
+        max-width: 280px;
+        border: 2px dashed var(--accent);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+        padding: 26px 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+      }
+      .drop-icon {
+        font-size: 22px;
+      }
+      #drop-label {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .drop-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -280,6 +321,14 @@
       <button id="shot-visible" class="secondary-btn">📸 Page</button>
       <button id="shot-region" class="secondary-btn">⬚ Region</button>
       <span id="save-state" class="save-state">Saved</span>
+    </div>
+
+    <div id="drop-overlay" class="drop-overlay" hidden>
+      <div class="drop-box">
+        <span class="drop-icon">🖼</span>
+        <span id="drop-label">Drop image to add to this doc</span>
+        <span class="drop-sub">added at the end</span>
+      </div>
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
