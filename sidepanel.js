@@ -401,6 +401,7 @@ async function onRegionCapture(kind) {
   const tab = await getActiveTab();
   const access = await ensureSiteAccess(tab);
   if (access === "unsupported") return showToast("This page can't be captured", true);
+  let stage = "select"; // which step failed, for a precise error message
   try {
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -409,8 +410,11 @@ async function onRegionCapture(kind) {
     const rect = res?.result;
     if (!rect) return; // cancelled (Esc / tiny drag)
     await new Promise((r) => setTimeout(r, 80)); // let the overlay's removal paint
+    stage = "capture";
     const blob = await captureVisible(tab?.windowId);
+    stage = "crop";
     const crop = await cropBlob(blob, rect, rect.dpr || 1);
+    stage = "save";
 
     if (kind === "ocr") {
       const { connected } = await getConnection();
@@ -428,12 +432,13 @@ async function onRegionCapture(kind) {
     }
     await saveEntry({ content: "", blob: crop }); // image only, no caption
     showToast("Screenshot added ✓");
-  } catch {
-    // No per-site grant and no live activeTab for this tab.
+  } catch (err) {
+    console.warn(`[dumpster] panel capture failed at "${stage}":`, err);
+    const detail = String(err?.message || err).slice(0, 110);
     showToast(
       access === "declined"
         ? "Capture needs access to this site — approve the prompt, or press Alt+Shift+S"
-        : "Couldn't capture this page — press Alt+Shift+S or use the page dock",
+        : `Capture failed (${stage}): ${detail}`,
       true
     );
   }
