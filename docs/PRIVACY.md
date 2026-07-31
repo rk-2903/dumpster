@@ -99,6 +99,7 @@ transferred to third parties, and is not used for advertising.
 | Identity | Only if you connect Google: sign-in for cloud sync. |
 | Alarms | Retry cloud-sync writes in the background if you're offline. |
 | Scripting (active tab only) | Show the "name your new bucket" prompt and the drag-a-region screenshot overlay on the current page. Nothing is read from the page. |
+| Optional per-site access | Only if you use the doc panel's region/OCR capture buttons on a site and approve Chrome's one-time prompt for it: lets the panel draw the selection overlay and capture that site's visible tab. Granted per site, by you; revocable anytime in `chrome://extensions` → Dumpster → Site access. |
 | Side panel | The optional study panel you can pin beside a page. |
 | googleapis.com access | Only if you connect Google: write to your own Sheet. |
 | supabase.co access | Send the anonymous usage statistics described above (opt-out). |

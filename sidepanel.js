@@ -378,12 +378,29 @@ async function saveEntry({ content, blob, format }) {
 }
 
 // ---- Toolbar captures: region screenshot / OCR grab ----
-// Draw the drag-rectangle overlay on the page (needs the activeTab grant from
-// the icon click that opened this panel), then either keep the crop as an
-// image entry or OCR it into paragraph text — both land at the end of the doc,
-// exactly like a text selection from the pill.
+// A click inside the panel is NOT one of the gestures that grants activeTab
+// for the page (icon click / menu / hotkey are), so the panel asks for
+// per-site access the first time you capture on a site — Chrome shows an
+// "Allow?" prompt once, then it works there permanently. The crop lands at
+// the end of the doc, exactly like a text selection from the pill.
+
+async function ensureSiteAccess(tab) {
+  const url = tab?.url || "";
+  if (!/^https?:\/\//i.test(url)) return "unsupported"; // chrome://, store, etc.
+  const pattern = `${new URL(url).origin}/*`;
+  try {
+    if (await chrome.permissions.contains({ origins: [pattern] })) return "ok";
+    // Ask immediately, while the button click's activation is still fresh.
+    return (await chrome.permissions.request({ origins: [pattern] })) ? "ok" : "declined";
+  } catch {
+    return "declined"; // request needs a gesture — fall through to activeTab
+  }
+}
+
 async function onRegionCapture(kind) {
   const tab = await getActiveTab();
+  const access = await ensureSiteAccess(tab);
+  if (access === "unsupported") return showToast("This page can't be captured", true);
   try {
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -412,8 +429,13 @@ async function onRegionCapture(kind) {
     await saveEntry({ content: "", blob: crop }); // image only, no caption
     showToast("Screenshot added ✓");
   } catch {
-    // Most likely: no live activeTab grant for this tab (e.g. after navigation).
-    showToast("Chrome needs a gesture — press Alt+Shift+S or use the page dock", true);
+    // No per-site grant and no live activeTab for this tab.
+    showToast(
+      access === "declined"
+        ? "Capture needs access to this site — approve the prompt, or press Alt+Shift+S"
+        : "Couldn't capture this page — press Alt+Shift+S or use the page dock",
+      true
+    );
   }
 }
 

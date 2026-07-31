@@ -75,7 +75,8 @@ Fill in on the dashboard:
     | `identity` | Optional: connect the user's Google account for cloud sync. |
     | `alarms` | Retry queued cloud-sync writes in the background. |
     | `scripting` + `activeTab` | On the current tab only, and only when the user acts: the "name your new bucket" prompt, the drag-a-region screenshot overlay, visible-tab capture, and the on-demand selection helper. No page content is read except the user's explicit text selection when they click a helper button. Uses `activeTab` (current tab, on gesture) — **no `<all_urls>` / broad host access**. |
-    | `sidePanel` | The optional study panel (notes + screenshots pinned beside a page). |
+    | `sidePanel` | The doc panel (markdown editor + captures pinned beside a page). |
+    | `optional_host_permissions` (`http(s)://*/*`) | Requested per-site at the moment the user clicks the panel's region/OCR capture button on that site (Chrome's own prompt). Used only to draw the selection overlay and capture the visible tab there. Never requested at install; revocable per site. |
     | Host permissions (googleapis.com) | Optional cloud sync writes to the user's own Google Sheet/Docs. |
     | Host permissions (supabase.co) | Send anonymous, opt-out usage statistics (event counts only) to the developer's backend. |
   - **Data collection disclosure** (Chrome's "Data safety" form): declare that
