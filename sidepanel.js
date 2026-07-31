@@ -9,15 +9,13 @@
 //    write/edit anything around them — GitHub-style Write/Preview with a
 //    formatting toolbar. Body sync to Google Docs is a later phase.
 //
-// Note on captures: activeTab is granted per-tab by extension gestures (action
-// click, menu, hotkey). The panel's capture buttons work while that grant is
-// live for the current tab; when Chrome refuses, we point at Alt+Shift+S.
+// Capture happens elsewhere (page dock, selection pill, right-click menu,
+// Alt+Shift+S) and flows in via dumpSignal; the bottom bar holds Share and
+// Open Doc for the active bucket's synced Google Doc.
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
 import { addEntry, makeEntry, putImage, getImage } from "./src/db.js";
 import { enqueueUpsert } from "./src/outbox.js";
-import { captureVisible, cropBlob } from "./src/capture.js";
-import { regionSelectOverlay } from "./src/regionSelect.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
 import { renderMarkdown } from "./src/markdown.js";
 import { getBody, setBody, ingestNewEntries, seedIfEmpty } from "./src/docBody.js";
@@ -36,8 +34,8 @@ const els = {
   modePreview: document.getElementById("mode-preview"),
   editor: document.getElementById("editor"),
   preview: document.getElementById("preview"),
-  shotVisible: document.getElementById("shot-visible"),
-  shotRegion: document.getElementById("shot-region"),
+  shareDoc: document.getElementById("share-doc"),
+  openDoc: document.getElementById("open-doc"),
   saveState: document.getElementById("save-state"),
   dropOverlay: document.getElementById("drop-overlay"),
   dropLabel: document.getElementById("drop-label"),
@@ -83,8 +81,8 @@ async function init() {
     }, 500);
   });
 
-  els.shotVisible.addEventListener("click", () => onShot(false));
-  els.shotRegion.addEventListener("click", () => onShot(true));
+  els.shareDoc.addEventListener("click", onShareDoc);
+  els.openDoc.addEventListener("click", onOpenDoc);
 
   // Live updates: new captures (from the pill/dock/hotkey/context menu) signal
   // via dumpSignal; bucket list changes keep the picker fresh.
@@ -195,8 +193,8 @@ async function refreshBuckets(selectId) {
   }
   const none = !docs.length;
   els.editor.disabled = none;
-  els.shotVisible.disabled = none;
-  els.shotRegion.disabled = none;
+  els.shareDoc.disabled = none;
+  els.openDoc.disabled = none;
   if (chosen) {
     els.bucket.value = chosen;
     if (chosen !== activeBucket) await switchBucket(chosen);
@@ -368,26 +366,35 @@ async function saveEntry({ content, blob }) {
   return entry;
 }
 
-async function onShot(region) {
-  const tab = await getActiveTab();
+// ---- Share / Open Doc (bottom bar) ----
+// Both act on the active bucket's synced Google Doc (docsDocMap). Screenshots
+// moved out of the bottom bar — the page dock, right-click menu, and
+// Alt+Shift+S still cover capture.
+
+function syncedDocUrl() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get("docsDocMap", (o) => {
+      const docId = o.docsDocMap?.[activeBucket]?.docId;
+      resolve(docId ? `https://docs.google.com/document/d/${docId}/edit` : null);
+    })
+  );
+}
+
+async function onShareDoc() {
+  const url = await syncedDocUrl();
+  if (!url) return showToast("No cloud doc yet — connect Google to share", true);
   try {
-    let rect = null;
-    if (region) {
-      const [res] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: regionSelectOverlay,
-      });
-      rect = res?.result;
-      if (!rect) return; // cancelled
-      await new Promise((r) => setTimeout(r, 80));
-    }
-    const blob = await captureVisible(tab?.windowId);
-    const final = rect ? await cropBlob(blob, rect, rect.dpr || 1) : blob;
-    await saveEntry({ content: "", blob: final }); // image only, no caption
-  } catch (err) {
-    // Most likely: no live activeTab grant for this tab.
-    showToast("Chrome needs a gesture — press Alt+Shift+S instead", true);
+    await navigator.clipboard.writeText(url);
+    showToast("Doc link copied ✓");
+  } catch {
+    showToast(url); // clipboard blocked — at least surface the link
   }
+}
+
+async function onOpenDoc() {
+  const url = await syncedDocUrl();
+  if (url) chrome.tabs.create({ url });
+  else chrome.runtime.openOptionsPage(); // not synced — open the local doc view
 }
 
 let toastTimer = null;
