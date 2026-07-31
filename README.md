@@ -127,8 +127,10 @@ are live at once, routed by each bucket's type:
   status changes, edits, and deletes update the same row.
 - **Doc buckets** — each bucket gets its own Google Doc (bucket name as the
   doc's title heading), entries grouped under date headings as a content line
-  plus a source · notes meta line. Edits and deletes locate their block via Docs
-  named ranges keyed by entry id. **Screenshots are embedded inline**: the Docs
+  plus a notes meta line. The heading hierarchy is consistent — **title › date
+  (Heading 1) › entry headings (Heading 2/3) › References (Heading 1)** — so the
+  Doc's built-in **outline pane** is a clean, navigable table of contents. Edits
+  and deletes locate their block via Docs named ranges keyed by entry id. **Screenshots are embedded inline**: the Docs
   API can only ingest publicly reachable images, so each screenshot is uploaded
   to your Drive, made link-visible for a few seconds while Docs copies it into
   the document, then deleted (the local copy remains the source of truth).

@@ -1,7 +1,12 @@
 // Google Docs sync provider. Mirrors each bucket into its own Google Doc
-// ("Dumpster — <bucket>"). Entries append chronologically under date headings
-// (HEADING_2); each entry is a content line plus a subtle meta line
-// (status · source · notes) with real links.
+// ("Dumpster — <bucket>"). Entries append chronologically under date headings.
+//
+// Heading hierarchy (so the Doc's outline pane is navigable):
+//   TITLE      → bucket name
+//   HEADING_1  → date sections + the "References" section
+//   HEADING_2/3→ entry headings (a saved "H1"/"H2" selection, one level below
+//                its date so it nests correctly in the outline)
+// Each entry is a content line plus a subtle italic notes line.
 //
 // Update/delete strategy: every entry's block is wrapped in a Docs NamedRange
 // keyed by the entry id. Named ranges track their position as the doc changes,
@@ -184,10 +189,12 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
   function formatRequests(entry, block, at) {
     const contentRange = r(at, at + block.contentLen + 1);
     switch (entry.format) {
+      // Entry headings sit one level BELOW the date sections (HEADING_1), so the
+      // Doc's outline nests them under their date: H1 date › H2/H3 entries.
       case "h1":
-        return [{ updateParagraphStyle: { range: contentRange, paragraphStyle: { namedStyleType: "HEADING_1" }, fields: "namedStyleType" } }];
-      case "h2":
         return [{ updateParagraphStyle: { range: contentRange, paragraphStyle: { namedStyleType: "HEADING_2" }, fields: "namedStyleType" } }];
+      case "h2":
+        return [{ updateParagraphStyle: { range: contentRange, paragraphStyle: { namedStyleType: "HEADING_3" }, fields: "namedStyleType" } }];
       case "list":
         return [{ createParagraphBullets: { range: contentRange, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } }];
       default:
@@ -275,7 +282,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     requests.push({
       updateParagraphStyle: {
         range: r(end, end + headingText.length),
-        paragraphStyle: { namedStyleType: "HEADING_2" },
+        paragraphStyle: { namedStyleType: "HEADING_1" }, // top-level section, like dates
         fields: "namedStyleType",
       },
     });
@@ -373,7 +380,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
         requests.push({
           updateParagraphStyle: {
             range: r(insertAt, insertAt + headingText.length),
-            paragraphStyle: { namedStyleType: "HEADING_2" },
+            paragraphStyle: { namedStyleType: "HEADING_1" }, // top-level date section
             fields: "namedStyleType",
           },
         });
