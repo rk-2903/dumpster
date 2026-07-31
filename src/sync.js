@@ -10,6 +10,7 @@ import { getConnection, getToken } from "./googleAuth.js";
 import { createSheetsProvider } from "./sheetsSync.js";
 import { createDocsProvider } from "./docsSync.js";
 import { blobDimensions } from "./capture.js";
+import { track } from "./telemetry.js";
 
 // Fetch a screenshot blob + pixel dimensions for the Docs provider.
 async function getImageInfo(entryId) {
@@ -128,6 +129,7 @@ export async function drain() {
   } catch (err) {
     console.warn("[dumpster] drain failed:", err.message);
     await setSyncState("error", err.message);
+    track("error", { code: "sync" }); // anonymous, no detail — just a count
   } finally {
     draining = false;
   }

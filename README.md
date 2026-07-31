@@ -15,8 +15,12 @@ you meant to come back to.
     flowing document — date sections, H1/H2/list/paragraph, inline screenshots,
     and a **References** section at the bottom listing the unique source links.
 - **Three ways to dump:**
-  - **Popup** (toolbar icon): pick a bucket (grouped Sheets/Docs), paste,
-    optionally *Add another* to stack several, then *Dump*.
+  - **Toolbar icon → doc panel**: clicking the icon opens the **doc panel**
+    beside the page (see Study capture below). The classic capture popup lives
+    on as **Quick dump…** (right-click the icon): a **Sheet / Doc** tab keeps
+    the two bucket types separate — pick the tab, pick a bucket, paste,
+    optionally *Add another* to stack several, then *Dump*. (Screenshots
+    enable on the Doc tab.)
   - **Right-click → Dump to → Sheet / Doc → [bucket]** — dumps the selected
     text, a link, an image, or the current page in one gesture.
   - **Right-click → … → ＋ New bucket…** — names the bucket via a prompt right
@@ -28,12 +32,18 @@ you meant to come back to.
     last-used Doc bucket. Thumbnails show in the viewer (click for full size),
     and synced screenshots appear **inside the bucket's Google Doc**, sized to
     fit.
-  - **Study side panel** (right-click the toolbar icon → *Open study panel*): a
-    notebook pinned beside the page — pick a Doc bucket, type notes, snap
-    screenshots, see this session's captures.
+  - **Doc panel** (click the toolbar icon): a
+    **markdown editor** pinned beside the page (Chrome's side panel). A fixed
+    top toolbar holds the **active-doc picker** (choose which Doc bucket you're
+    writing into), paragraph styles (Normal/H1/H2), **B / I / code / lists**,
+    and GitHub-style **Write / Preview** tabs with a live rendered preview.
+    Selections and screenshots you capture on the page flow straight into the
+    active doc (and still sync as entries); around them you can write anything
+    in markdown — saved locally as you type. (Free-form body → Google Docs
+    sync is a roadmap item.)
   - **OCR**: synced screenshots get their text extracted (via Drive's free OCR)
     so the bucket filter can find words *inside* your screenshots.
-  - **Page helper** (current tab, activated by opening the Dumpster popup —
+  - **Page helper** (current tab, armed when you open the doc panel or Quick dump —
     injected on demand, never running on other tabs in the background; toggle it
     off in the popup):
     - a **floating dock** on the right edge you can **drag up/down** (its
@@ -65,8 +75,15 @@ you meant to come back to.
   own Google Docs. See below.
 
 Data lives in the browser (IndexedDB + `chrome.storage.local`, with persistent
-storage requested so it isn't evicted). Nothing leaves your machine unless you
-connect Google — and then it goes only to your own Drive.
+storage requested so it isn't evicted). Your **content** never leaves your
+machine unless you connect Google — and then it goes only to your own Drive.
+
+- **Anonymous usage stats (opt-out)** — to see how many people use Dumpster and
+  which features matter, it sends **anonymous** event counts (a random id,
+  event names like `install`/`active`/`feature`/`error`, version, locale) to the
+  developer's Supabase backend. Never your dumps, selections, screenshots, page
+  URLs, or Google data. Toggle it off in the popup or the Cloud sync dialog. The
+  backend (schema + edge functions you self-host) lives in [`supabase/`](supabase/).
 
 ## Install (unpacked, for development)
 
@@ -88,6 +105,7 @@ Reload the extension from that page after any code change.
 | `src/outbox.js` | Durable, coalescing sync op queue (no-ops while disconnected) |
 | `src/sync.js` | Sync orchestrator — routes ops to the provider matching each bucket's kind |
 | `src/googleAuth.js` | `chrome.identity` connect/disconnect/token wrapper |
+| `src/telemetry.js` | Anonymous, opt-out usage telemetry (durable batched sender) |
 | `src/sheetsSync.js` | Sheets provider — tab per bucket, row per dump keyed by entry id |
 | `src/docsSync.js` | Docs provider — doc per bucket, date headings, named-range keyed blocks |
 | `popup.html/.css/.js` | Toolbar popup with batch staging |
@@ -95,6 +113,7 @@ Reload the extension from that page after any code change.
 | `newbucket.html/.js` | Fallback naming window for the context-menu New bucket flow |
 | `scripts/package.sh` | Builds the Chrome Web Store zip (`dist/`) |
 | `docs/` | Publishing guide + privacy policy draft |
+| `supabase/` | Telemetry backend — schema, edge functions, deploy guide (self-hosted) |
 | `vendor/` | SheetJS (lazy-loaded for Excel import/export) |
 | `icons/` | Generated PNG icons |
 
@@ -169,6 +188,9 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 - **Per-bucket typed fields** — let a bucket define its own columns instead of the
   shared Status/Notes pair.
 - **Keyboard-shortcut quick-capture** bar as a third, fastest entry point.
+- **Doc-panel body sync** — push the panel's free-form markdown body into the
+  bucket's Google Doc (today only captured entries sync; manual panel writing
+  stays local).
 - **Two-way sync** — reflect edits made in the Sheet/Doc back into Dumpster
   (currently one-way push).
 

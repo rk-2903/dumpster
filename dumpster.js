@@ -25,6 +25,7 @@ import {
   enqueueBucketOp,
 } from "./src/outbox.js";
 import { connect as gConnect, disconnect as gDisconnect, getConnection } from "./src/googleAuth.js";
+import { track, pingActive, flush } from "./src/telemetry.js";
 
 const els = {
   bucketOpenLink: document.getElementById("bucket-open-link"),
@@ -84,6 +85,8 @@ const kindViews = (kind) => (kind === "doc" ? ["document", "list"] : ["list", "b
 
 async function init() {
   await ensureSeeded();
+  pingActive(); // opening the workspace counts as active-today
+  flush();
   await migrateStatuses();
   const savedPref = await getSetting("viewPref");
   if (savedPref) viewPref = { ...viewPref, ...savedPref };
@@ -499,6 +502,7 @@ function wireDropTarget(col, status) {
     entry.status = status;
     await updateEntry(id, { status });
     enqueueUpsert(id);
+    track("feature", { name: "board-move" });
     renderView(); // re-render board so cards + counts move
   });
 }
@@ -892,6 +896,7 @@ async function doExport() {
     const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
     download(`dumpster-${stamp()}.xlsx`, XLSX_MIME, buf);
   }
+  track("feature", { name: exportFormat === "json" ? "export-json" : "export-xlsx" });
   closeExportModal();
 }
 
@@ -1136,6 +1141,7 @@ async function onConnect() {
   label.textContent = "Connecting…";
   try {
     await gConnect(); // interactive OAuth via chrome.identity
+    track("feature", { name: "connect" });
     // Backfill: queue all existing dumps so current data lands in the target.
     await backfillAll();
     await refreshCloudModal();

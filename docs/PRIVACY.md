@@ -23,8 +23,35 @@ and stays on your device unless *you* connect your own Google account.
 - **Page context** — when you save from a page, the current tab's URL and title
   are attached to that dump so you remember where it came from.
 
-That's all. Dumpster has no accounts, no analytics, no tracking, and no
-advertising. It never reads your browsing history.
+Dumpster has no user accounts, no advertising, and no cross-site tracking, and
+it never reads your browsing history. It does collect **anonymous, opt-out usage
+statistics** to help decide what to improve — described in its own section
+below.
+
+## Anonymous usage statistics (opt-out)
+
+To understand how many people use Dumpster and which features matter, the
+extension sends a small amount of **anonymous** usage data. This is **on by
+default** and you can turn it off anytime (in the popup, or in the Cloud sync
+dialog: *"Share anonymous usage stats"*).
+
+- **What is collected:** a random identifier generated on your device (a UUID —
+  not derived from you, your account, or your hardware), the name of an event
+  (for example `install`, a daily `active` ping, a `feature` used such as
+  "screenshot" or "export", or an `error` count), the extension version, and
+  your browser's language. That's the whole list.
+- **What is never collected:** the content of your dumps, the text you select,
+  your screenshots, the URLs or titles of pages you visit, your Google account
+  or email, or anything from your Google Drive. Usage events carry counts and
+  short labels only — never your data.
+- **Where it goes:** to the developer's own Supabase project, used solely to
+  produce aggregate counts (active users, feature usage, retention, error
+  rates). It is not sold, shared, or used for advertising or profiling.
+- **Uninstall:** if telemetry is on, removing the extension opens a page that
+  records a single anonymous `uninstall` event (the random id only). Turning
+  telemetry off first prevents even that.
+- **Turning it off:** disables all of the above immediately and clears anything
+  still queued on your device.
 
 ## Where your data lives
 
@@ -49,8 +76,10 @@ advertising. It never reads your browsing history.
 
 - No selling, sharing, or transferring of your data to third parties.
 - No use of your data for advertising, profiling, or creditworthiness purposes.
-- No transmission of your data anywhere except, at your explicit choice, to
-  your own Google Drive.
+- No transmission of *your content* anywhere except, at your explicit choice, to
+  your own Google Drive. The only other network traffic is the anonymous usage
+  statistics described above (which you can turn off) — never your dumps,
+  selections, screenshots, page URLs, or Google data.
 
 ## Google user data (Limited Use disclosure)
 
@@ -72,6 +101,7 @@ transferred to third parties, and is not used for advertising.
 | Scripting (active tab only) | Show the "name your new bucket" prompt and the drag-a-region screenshot overlay on the current page. Nothing is read from the page. |
 | Side panel | The optional study panel you can pin beside a page. |
 | googleapis.com access | Only if you connect Google: write to your own Sheet. |
+| supabase.co access | Send the anonymous usage statistics described above (opt-out). |
 
 ## Deleting your data
 
