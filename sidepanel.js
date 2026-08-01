@@ -65,6 +65,11 @@ async function init() {
 
   els.modeWrite.addEventListener("click", () => setMode("write"));
   els.modePreview.addEventListener("click", () => setMode("preview"));
+  // Double-click anywhere in the rendered preview → jump into edit mode.
+  els.preview.addEventListener("dblclick", () => {
+    setMode("write");
+    els.editor.focus();
+  });
 
   // Toolbar → markdown edits at the cursor.
   els.fmtBlock.addEventListener("change", () => {
