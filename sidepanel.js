@@ -9,15 +9,17 @@
 //    write/edit anything around them — GitHub-style Write/Preview with a
 //    formatting toolbar. Body sync to Google Docs is a later phase.
 //
-// Note on captures: activeTab is granted per-tab by extension gestures (action
-// click, menu, hotkey). The panel's capture buttons work while that grant is
-// live for the current tab; when Chrome refuses, we point at Alt+Shift+S.
+// Capture happens elsewhere (page dock, selection pill, right-click menu,
+// Alt+Shift+S) and flows in via dumpSignal; the bottom bar holds Share and
+// Open Doc for the active bucket's synced Google Doc.
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
 import { addEntry, makeEntry, putImage, getImage } from "./src/db.js";
 import { enqueueUpsert } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
+import { getToken, getConnection } from "./src/googleAuth.js";
+import { createDocsProvider } from "./src/docsSync.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
 import { renderMarkdown } from "./src/markdown.js";
 import { getBody, setBody, ingestNewEntries, seedIfEmpty } from "./src/docBody.js";
@@ -36,9 +38,13 @@ const els = {
   modePreview: document.getElementById("mode-preview"),
   editor: document.getElementById("editor"),
   preview: document.getElementById("preview"),
-  shotVisible: document.getElementById("shot-visible"),
-  shotRegion: document.getElementById("shot-region"),
+  capRegion: document.getElementById("cap-region"),
+  capOcr: document.getElementById("cap-ocr"),
+  shareDoc: document.getElementById("share-doc"),
+  openDoc: document.getElementById("open-doc"),
   saveState: document.getElementById("save-state"),
+  dropOverlay: document.getElementById("drop-overlay"),
+  dropLabel: document.getElementById("drop-label"),
   toast: document.getElementById("toast"),
 };
 
@@ -81,8 +87,10 @@ async function init() {
     }, 500);
   });
 
-  els.shotVisible.addEventListener("click", () => onShot(false));
-  els.shotRegion.addEventListener("click", () => onShot(true));
+  els.capRegion.addEventListener("click", () => onRegionCapture("shot"));
+  els.capOcr.addEventListener("click", () => onRegionCapture("ocr"));
+  els.shareDoc.addEventListener("click", onShareDoc);
+  els.openDoc.addEventListener("click", onOpenDoc);
 
   // Live updates: new captures (from the pill/dock/hotkey/context menu) signal
   // via dumpSignal; bucket list changes keep the picker fresh.
@@ -97,6 +105,75 @@ async function init() {
   chrome.storage.local.get("selectionHelper", (o) => {
     if (o.selectionHelper !== false) injectSelectionHelper();
   });
+
+  setupImageDrop();
+}
+
+// ---- Drag an image into the panel → appended at the end of the active doc ----
+// OS file drags carry real bytes and go through the normal screenshot flow.
+// Page-image drags often carry only a URL: we fetch it when the site's CORS
+// allows (the panel has no broad host permissions), else save the link.
+function setupImageDrop() {
+  let depth = 0; // dragenter/leave fire per child; count to know when we truly left
+
+  const looksDroppable = (dt) =>
+    !!dt && ([...(dt.items || [])].some((i) => i.kind === "file") || dt.types?.includes("text/uri-list"));
+
+  document.addEventListener("dragenter", async (e) => {
+    if (!looksDroppable(e.dataTransfer)) return;
+    e.preventDefault();
+    depth++;
+    const docs = (await getBuckets()).filter((b) => b.kind === "doc");
+    const name = docs.find((b) => b.id === activeBucket)?.name;
+    els.dropLabel.textContent = name ? `Drop image to add to “${name}”` : "Create a Doc bucket first";
+    els.dropOverlay.hidden = false;
+  });
+  document.addEventListener("dragover", (e) => {
+    if (!looksDroppable(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  document.addEventListener("dragleave", () => {
+    depth = Math.max(0, depth - 1);
+    if (!depth) els.dropOverlay.hidden = true;
+  });
+  document.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    depth = 0;
+    els.dropOverlay.hidden = true;
+    if (!activeBucket) return showToast("Create a Doc bucket first", true);
+    try {
+      await handleDrop(e.dataTransfer);
+    } catch (err) {
+      showToast(`Drop failed: ${err.message}`, true);
+    }
+  });
+}
+
+async function handleDrop(dt) {
+  // 1) Real files (from the OS, or page drags that include bytes).
+  const files = [...(dt?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (files.length) {
+    for (const f of files) await saveEntry({ content: "", blob: f });
+    showToast(`Added ${files.length === 1 ? "image" : files.length + " images"} to the doc ✓`);
+    return;
+  }
+
+  // 2) URL-only drags (an <img> dragged off a page).
+  const uri = (dt?.getData("text/uri-list") || dt?.getData("text/plain") || "").split("\n")[0].trim();
+  if (!/^https?:\/\//i.test(uri)) return showToast("That didn't contain an image", true);
+  try {
+    const res = await fetch(uri);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) throw new Error("not an image");
+    await saveEntry({ content: "", blob });
+    showToast("Added image to the doc ✓");
+  } catch {
+    // Site blocked the fetch (CORS/hotlinking) — keep the reference instead.
+    await saveEntry({ content: uri });
+    showToast("Image blocked by the site — saved its link instead");
+  }
 }
 
 async function injectSelectionHelper() {
@@ -124,8 +201,10 @@ async function refreshBuckets(selectId) {
   }
   const none = !docs.length;
   els.editor.disabled = none;
-  els.shotVisible.disabled = none;
-  els.shotRegion.disabled = none;
+  els.shareDoc.disabled = none;
+  els.openDoc.disabled = none;
+  els.capRegion.disabled = none;
+  els.capOcr.disabled = none;
   if (chosen) {
     els.bucket.value = chosen;
     if (chosen !== activeBucket) await switchBucket(chosen);
@@ -276,7 +355,7 @@ function getActiveTab() {
   );
 }
 
-async function saveEntry({ content, blob }) {
+async function saveEntry({ content, blob, format }) {
   const bucketId = activeBucket;
   const tab = await getActiveTab();
   const entry = makeEntry({
@@ -285,6 +364,7 @@ async function saveEntry({ content, blob }) {
     sourceUrl: tab?.url || "",
     sourceTitle: tab?.title || "",
   });
+  if (format) entry.format = format;
   if (blob) {
     entry.hasImage = true;
     await putImage(entry.id, blob);
@@ -297,26 +377,107 @@ async function saveEntry({ content, blob }) {
   return entry;
 }
 
-async function onShot(region) {
-  const tab = await getActiveTab();
+// ---- Toolbar captures: region screenshot / OCR grab ----
+// A click inside the panel is NOT one of the gestures that grants activeTab
+// for the page (icon click / menu / hotkey are), and captureVisibleTab
+// rejects per-origin grants outright — it demands "<all_urls>" or a live
+// activeTab. So the first capture asks Chrome's one-time "allow on all
+// websites" prompt; after approval, panel capture works everywhere. The crop
+// lands at the end of the doc, exactly like a text selection from the pill.
+
+const ALL_URLS = { origins: ["<all_urls>"] };
+// Chrome hard-blocks scripting these even with <all_urls> granted.
+const UNSCRIPTABLE = /^https:\/\/(chromewebstore\.google\.com|chrome\.google\.com\/webstore)/i;
+
+async function ensureCaptureAccess(tab) {
+  const url = tab?.url || "";
+  if (!/^https?:\/\//i.test(url) || UNSCRIPTABLE.test(url)) return "unsupported";
   try {
-    let rect = null;
-    if (region) {
-      const [res] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: regionSelectOverlay,
-      });
-      rect = res?.result;
-      if (!rect) return; // cancelled
-      await new Promise((r) => setTimeout(r, 80));
-    }
-    const blob = await captureVisible(tab?.windowId);
-    const final = rect ? await cropBlob(blob, rect, rect.dpr || 1) : blob;
-    await saveEntry({ content: "", blob: final }); // image only, no caption
-  } catch (err) {
-    // Most likely: no live activeTab grant for this tab.
-    showToast("Chrome needs a gesture — press Alt+Shift+S instead", true);
+    if (await chrome.permissions.contains(ALL_URLS)) return "ok";
+    // Ask immediately, while the button click's activation is still fresh —
+    // a single prompt, ever; the grant persists.
+    return (await chrome.permissions.request(ALL_URLS)) ? "ok" : "declined";
+  } catch {
+    return "declined"; // request needs a gesture — fall through to activeTab
   }
+}
+
+async function onRegionCapture(kind) {
+  const tab = await getActiveTab();
+  const access = await ensureCaptureAccess(tab);
+  if (access === "unsupported") return showToast("This page can't be captured", true);
+  let stage = "select"; // which step failed, for a precise error message
+  try {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: regionSelectOverlay,
+    });
+    const rect = res?.result;
+    if (!rect) return; // cancelled (Esc / tiny drag)
+    await new Promise((r) => setTimeout(r, 80)); // let the overlay's removal paint
+    stage = "capture";
+    const blob = await captureVisible(tab?.windowId);
+    stage = "crop";
+    const crop = await cropBlob(blob, rect, rect.dpr || 1);
+    stage = "save";
+
+    if (kind === "ocr") {
+      const { connected } = await getConnection();
+      if (!connected) return showToast("Connect Google for OCR", true);
+      els.capOcr.disabled = true;
+      try {
+        const text = ((await createDocsProvider({ getToken }).ocrImage(crop).catch(() => "")) || "").trim();
+        if (!text) return showToast("No text found in that region", true);
+        await saveEntry({ content: text, format: "p" });
+        showToast("Text added to the doc ✓");
+      } finally {
+        els.capOcr.disabled = false;
+      }
+      return;
+    }
+    await saveEntry({ content: "", blob: crop }); // image only, no caption
+    showToast("Screenshot added ✓");
+  } catch (err) {
+    console.warn(`[dumpster] panel capture failed at "${stage}":`, err);
+    const detail = String(err?.message || err).slice(0, 110);
+    showToast(
+      access === "declined"
+        ? "Capture needs site access — approve the one-time prompt, or press Alt+Shift+S"
+        : `Capture failed (${stage}): ${detail}`,
+      true
+    );
+  }
+}
+
+// ---- Share / Open Doc (bottom bar) ----
+// Both act on the active bucket's synced Google Doc (docsDocMap). Screenshots
+// moved out of the bottom bar — the page dock, right-click menu, and
+// Alt+Shift+S still cover capture.
+
+function syncedDocUrl() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get("docsDocMap", (o) => {
+      const docId = o.docsDocMap?.[activeBucket]?.docId;
+      resolve(docId ? `https://docs.google.com/document/d/${docId}/edit` : null);
+    })
+  );
+}
+
+async function onShareDoc() {
+  const url = await syncedDocUrl();
+  if (!url) return showToast("No cloud doc yet — connect Google to share", true);
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Doc link copied ✓");
+  } catch {
+    showToast(url); // clipboard blocked — at least surface the link
+  }
+}
+
+async function onOpenDoc() {
+  const url = await syncedDocUrl();
+  if (url) chrome.tabs.create({ url });
+  else chrome.runtime.openOptionsPage(); // not synced — open the local doc view
 }
 
 let toastTimer = null;

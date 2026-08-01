@@ -36,11 +36,17 @@ you meant to come back to.
     **markdown editor** pinned beside the page (Chrome's side panel). A fixed
     top toolbar holds the **active-doc picker** (choose which Doc bucket you're
     writing into), paragraph styles (Normal/H1/H2), **B / I / code / lists**,
-    and GitHub-style **Write / Preview** tabs with a live rendered preview.
+    **⬚ region screenshot** and **OCR** capture buttons (both drop a drag-
+    rectangle on the page; the crop lands at the end of the doc as an image or
+    as extracted paragraph text — the first use asks Chrome's one-time
+    site-access prompt, required by the capture API), and GitHub-style
+    **Write / Preview** tabs with a live rendered preview.
     Selections and screenshots you capture on the page flow straight into the
     active doc (and still sync as entries); around them you can write anything
-    in markdown — saved locally as you type. (Free-form body → Google Docs
-    sync is a roadmap item.)
+    in markdown — saved locally as you type. You can also **drag an image into
+    the panel** (from a page or your desktop) and it's appended at the end of
+    the doc — if a site blocks fetching its image, the link is saved instead.
+    (Free-form body → Google Docs sync is a roadmap item.)
   - **OCR**: synced screenshots get their text extracted (via Drive's free OCR)
     so the bucket filter can find words *inside* your screenshots.
   - **Page helper** (current tab, armed when you open the doc panel or Quick dump —
