@@ -18,6 +18,7 @@ import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntr
 import { enqueueUpsert } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
+import { ytGrabTranscript } from "./src/ytTranscript.js";
 import { getToken, getConnection } from "./src/googleAuth.js";
 import { createDocsProvider } from "./src/docsSync.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
@@ -40,6 +41,8 @@ const els = {
   preview: document.getElementById("preview"),
   capRegion: document.getElementById("cap-region"),
   capOcr: document.getElementById("cap-ocr"),
+  capTs: document.getElementById("cap-ts"),
+  capTsMenu: document.getElementById("cap-ts-menu"),
   shareDoc: document.getElementById("share-doc"),
   openDoc: document.getElementById("open-doc"),
   saveState: document.getElementById("save-state"),
@@ -140,6 +143,16 @@ async function init() {
 
   els.capRegion.addEventListener("click", () => onRegionCapture("shot"));
   els.capOcr.addEventListener("click", () => onRegionCapture("ocr"));
+  els.capTs.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.capTsMenu.hidden = !els.capTsMenu.hidden;
+  });
+  els.capTsMenu.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tsec]");
+    if (!b) return;
+    els.capTsMenu.hidden = true;
+    onTranscriptCapture(Number(b.dataset.tsec) || 0);
+  });
   els.shareDoc.addEventListener("click", onShareDoc);
   els.openDoc.addEventListener("click", onOpenDoc);
 
@@ -157,6 +170,7 @@ async function init() {
   document.addEventListener("click", () => {
     els.exportMenu.hidden = true;
     els.sheetExportMenu.hidden = true;
+    els.capTsMenu.hidden = true;
   });
   els.exportPdf.addEventListener("click", onExportPdf);
   els.exportDocx.addEventListener("click", onExportDocx);
@@ -323,6 +337,7 @@ async function refreshBuckets(selectId) {
   els.openDoc.disabled = none;
   els.capRegion.disabled = none;
   els.capOcr.disabled = none;
+  els.capTs.disabled = none;
   if (chosen) {
     els.bucket.value = chosen;
     if (chosen !== activeBucket) await switchBucket(chosen);
@@ -625,14 +640,14 @@ function getActiveTab() {
   );
 }
 
-async function saveEntry({ content, blob, format }) {
+async function saveEntry({ content, blob, format, sourceUrl, sourceTitle, feature }) {
   const bucketId = activeBucket;
   const tab = await getActiveTab();
   const entry = makeEntry({
     bucketId,
     content,
-    sourceUrl: tab?.url || "",
-    sourceTitle: tab?.title || "",
+    sourceUrl: sourceUrl ?? (tab?.url || ""),
+    sourceTitle: sourceTitle ?? (tab?.title || ""),
   });
   if (format) entry.format = format;
   if (blob) {
@@ -643,7 +658,7 @@ async function saveEntry({ content, blob, format }) {
   await setLastBucketId(bucketId);
   await signalDump(); // also triggers our own onNewCaptures → body + preview
   await enqueueUpsert(entry.id);
-  track("feature", { name: blob ? "panel-screenshot" : "panel-note" });
+  track("feature", { name: feature || (blob ? "panel-screenshot" : "panel-note") });
   return entry;
 }
 
@@ -716,6 +731,47 @@ async function onRegionCapture(kind) {
         : `Capture failed (${stage}): ${detail}`,
       true
     );
+  }
+}
+
+// ---- Toolbar capture: YouTube transcript (last 30s / 60s / full) ----
+// Injects ytGrabTranscript into the active tab (needs the same one-time
+// all-sites grant as region capture — scripting only, no pixels). The result
+// is saved like the dock's version: [m:ss] bullet lines with a source URL
+// that deep-links to watch?v=…&t=<sec>s.
+async function onTranscriptCapture(windowSec) {
+  const tab = await getActiveTab();
+  if (!/^https:\/\/([\w-]+\.)?youtube\.com\//i.test(tab?.url || "")) {
+    return showToast("Open a YouTube video first", true);
+  }
+  const access = await ensureCaptureAccess(tab);
+  if (access === "unsupported") return showToast("This page can't be captured", true);
+  els.capTs.disabled = true;
+  try {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: ytGrabTranscript,
+      args: [windowSec],
+    });
+    const r = res?.result;
+    if (!r?.ok) return showToast(r?.error || "No transcript on this video", true);
+    await saveEntry({
+      content: r.text,
+      format: "list",
+      sourceUrl: r.sourceUrl,
+      sourceTitle: r.sourceTitle,
+      feature: "panel-yt-transcript",
+    });
+    showToast("Transcript added to the doc");
+  } catch (err) {
+    showToast(
+      access === "declined"
+        ? "Transcript needs site access — approve the one-time prompt"
+        : `Transcript failed: ${String(err?.message || err).slice(0, 90)}`,
+      true
+    );
+  } finally {
+    els.capTs.disabled = false;
   }
 }
 
