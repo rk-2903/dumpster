@@ -1085,7 +1085,19 @@ async function refreshCloudModal() {
 // Links to everything synced: the spreadsheet, plus a collapsible list of each
 // Doc bucket's doc. Only doc-kind buckets are listed — docsDocMap may hold
 // stale entries for buckets that predate typed buckets (or were retyped).
+//
+// The modal re-renders on storage changes while it's open, so renders can
+// overlap. Gather all data BEFORE touching the DOM, and let only the newest
+// render write — otherwise two interleaved passes each append their links and
+// every section shows up twice.
+let cloudLinksRender = 0;
 async function renderCloudLinks() {
+  const token = ++cloudLinksRender;
+  const sid = await getSetting("sheetsSpreadsheetId");
+  const map = (await getSetting("docsDocMap")) || {};
+  const buckets = await getBuckets();
+  if (token !== cloudLinksRender) return; // superseded by a newer render
+
   els.cloudLinks.innerHTML = "";
   const mkLink = (href, text, parent) => {
     const a = document.createElement("a");
@@ -1097,11 +1109,8 @@ async function renderCloudLinks() {
     parent.appendChild(a);
   };
 
-  const sid = await getSetting("sheetsSpreadsheetId");
   if (sid) mkLink(`https://docs.google.com/spreadsheets/d/${sid}/edit`, "Open Google Sheet ↗", els.cloudLinks);
 
-  const map = (await getSetting("docsDocMap")) || {};
-  const buckets = await getBuckets();
   const docBuckets = buckets.filter((b) => b.kind === "doc" && map[b.id]);
 
   if (docBuckets.length) {
