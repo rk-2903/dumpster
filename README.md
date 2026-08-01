@@ -76,7 +76,10 @@ you meant to come back to.
       screenshot, a **⬚ region** screenshot (drag a rectangle right on the page),
       an **OCR** grab (drag a region → its text is extracted and added as a
       paragraph — needs Google connected), and **H1 / H2 / ≔ / ¶** chips that
-      save the current selection to your last-used Doc bucket. Its **×** menu
+      save the current selection to your last-used Doc bucket. On **YouTube**
+      the dock adds a **transcript** button — capture the **last 30s / 60s or
+      the full transcript** as timestamped `[m:ss]` bullets, with the entry's
+      source link resuming the video at that moment. Its **×** menu
       hides the dock **until next visit**, **on this domain**, or **on all
       websites** (re-enable from the Quick dump toggle);
     - a **selection menu**: select text and a small pill appears —
