@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dumpster — Export</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        background: #f4f5f7;
+        font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Georgia, serif;
+        color: #1b1f24;
+      }
+      .bar {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        border-bottom: 1px solid #e5e7ea;
+        padding: 10px 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .bar .mark {
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        background: #10b981;
+      }
+      .bar b {
+        font-size: 14px;
+      }
+      .bar .hint {
+        color: #69707b;
+        font-size: 12.5px;
+        flex: 1;
+      }
+      .bar button {
+        border: 1px solid #10b981;
+        background: #10b981;
+        color: #fff;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 7px 16px;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      .page {
+        max-width: 720px;
+        margin: 26px auto 60px;
+        background: #fff;
+        border: 1px solid #e5e7ea;
+        border-radius: 12px;
+        padding: 48px 56px;
+      }
+      h1.doc-title {
+        font-size: 28px;
+        margin: 0 0 4px;
+        letter-spacing: -0.02em;
+      }
+      .doc-sub {
+        color: #9aa1ab;
+        font-size: 12.5px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin-bottom: 26px;
+      }
+      .doc h1 {
+        font-size: 22px;
+        margin: 22px 0 8px;
+      }
+      .doc h2 {
+        font-size: 18px;
+        margin: 18px 0 6px;
+      }
+      .doc h3 {
+        font-size: 16px;
+        margin: 14px 0 5px;
+      }
+      .doc p {
+        margin: 9px 0;
+      }
+      .doc ul,
+      .doc ol {
+        margin: 9px 0;
+        padding-left: 24px;
+      }
+      .doc blockquote {
+        margin: 10px 0;
+        padding: 6px 14px;
+        border-left: 3px solid #10b981;
+        color: #555c66;
+      }
+      .doc code {
+        background: #f0f1f3;
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+      }
+      .doc pre {
+        background: #f0f1f3;
+        border-radius: 8px;
+        padding: 12px 14px;
+        overflow-x: auto;
+      }
+      .doc img {
+        max-width: 100%;
+        border-radius: 8px;
+        border: 1px solid #e5e7ea;
+        display: block;
+        margin: 12px 0;
+      }
+      .doc a {
+        color: #0d9f76;
+      }
+      .doc hr {
+        border: none;
+        border-top: 1px solid #e5e7ea;
+        margin: 18px 0;
+      }
+      @media print {
+        body {
+          background: #fff;
+        }
+        .bar {
+          display: none;
+        }
+        .page {
+          max-width: none;
+          margin: 0;
+          border: none;
+          border-radius: 0;
+          padding: 0;
+        }
+        .doc img {
+          break-inside: avoid;
+        }
+        h1,
+        h2,
+        h3 {
+          break-after: avoid;
+        }
+      }
+      @page {
+        margin: 18mm 16mm;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <span class="mark" aria-hidden="true"></span>
+      <b>Export</b>
+      <span class="hint">Choose “Save as PDF” as the destination in the print dialog.</span>
+      <button id="print-btn">Print / Save as PDF</button>
+    </div>
+    <div class="page">
+      <h1 class="doc-title" id="doc-title"></h1>
+      <div class="doc-sub" id="doc-sub"></div>
+      <div class="doc" id="doc"></div>
+    </div>
+    <script type="module" src="export.js"></script>
+  </body>
+</html>
