@@ -27,40 +27,50 @@ you meant to come back to.
     on the page you're on and files the dump into it in one go (a small naming
     window appears only on pages Chrome can't inject into, e.g. `chrome://`).
 - **Study capture (Doc buckets)** — built for researching with a page open:
-  - **Screenshots**: from the popup (📸 button), right-click → **Screenshot to**
+  - **Screenshots**: from Quick dump (📸 button), right-click → **Screenshot to**
     (visible area or **drag-a-region**), or **Alt+Shift+S** straight to your
     last-used Doc bucket. Thumbnails show in the viewer (click for full size),
     and synced screenshots appear **inside the bucket's Google Doc**, sized to
     fit.
-  - **Doc panel** (click the toolbar icon): a
-    **markdown editor** pinned beside the page (Chrome's side panel). A fixed
-    top toolbar holds the **active-doc picker** (choose which Doc bucket you're
-    writing into), paragraph styles (Normal/H1/H2), **B / I / code / lists**,
-    **⬚ region screenshot** and **OCR** capture buttons (both drop a drag-
-    rectangle on the page; the crop lands at the end of the doc as an image or
-    as extracted paragraph text — the first use asks Chrome's one-time
-    site-access prompt, required by the capture API), and GitHub-style
-    **Write / Preview** tabs with a live rendered preview. **Export** sits
-    beside Share: a Doc exports as **PDF** (print-styled page → Save as PDF),
-    **Word (.docx)** (via the synced Google Doc — needs Google connected), or a
-    **self-contained Markdown** file (screenshots embedded as data URIs). The
-    Sheet tracker's bar mirrors the doc bar — **Share / Open Sheet** (deep-link
-    to the bucket's tab) and **Export** as **Excel or JSON** through the same
-    picker as the workspace dialog — the current tracker is pre-selected, and
-    you can tick more or **All trackers** for one combined file (a worksheet
-    per tracker in Excel, a key per tracker in JSON). PDF/MD/Excel/JSON read from local storage, so
-    they work offline and for never-synced buckets.
-    Selections and screenshots you capture on the page flow straight into the
-    active doc (and still sync as entries); around them you can write anything
-    in markdown — saved locally as you type. You can also **drag an image into
-    the panel** (from a page or your desktop) and it's appended at the end of
-    the doc — if a site blocks fetching its image, the link is saved instead.
-    (Free-form body → Google Docs sync is a roadmap item.)
+  - **Doc panel** (click the toolbar icon): a **markdown editor** pinned
+    beside the page (Chrome's side panel), with a **Doc | Sheet** switcher at
+    the top.
+    - **Doc mode** — a fixed toolbar holds the **active-doc picker**, paragraph
+      styles (Normal/H1/H2), **B / I / code / lists**, **⬚ region screenshot**
+      and **OCR** capture buttons (both drop a drag-rectangle on the page; the
+      crop lands at the end of the doc as an image or extracted paragraph text
+      — first use asks Chrome's one-time site-access prompt, required by the
+      capture API), and GitHub-style **Write / Preview** tabs with a live
+      rendered preview (**double-click the preview** to jump into edit mode).
+      Selections and screenshots you capture on the page flow straight into
+      the active doc (and still sync as entries); around them you can write
+      anything in markdown — saved locally as you type. **Drag an image into
+      the panel** (from a page or your desktop) and it's appended at the end
+      of the doc; if a site blocks fetching its image, the link is saved
+      instead. (Free-form body → Google Docs sync is a roadmap item.)
+    - **Sheet mode** — a mini tracker: pick a Sheet bucket, **quick-add**
+      entries (⌘/Ctrl+Enter, current page attached as source), and flip the
+      newest rows' **status pills** (To Do / In Process / Done) inline —
+      changes sync and live-refresh an open workspace. The mode and last
+      tracker are remembered.
+    - **Bottom bar** (per mode) — **⇪ Share** and **↗ Open** deep-link to the
+      bucket's Google Doc or its exact spreadsheet tab, and **⇓ Export**:
+      a Doc exports as **PDF** (print-styled page → Save as PDF),
+      **Word (.docx)** (via the synced Google Doc — needs Google connected),
+      or a **self-contained Markdown** file (screenshots embedded as data
+      URIs); a tracker exports as **Excel or JSON** through the same picker as
+      the workspace dialog — current tracker pre-selected, tick more or **All
+      trackers** for one combined file (a worksheet per tracker in Excel, a
+      key per tracker in JSON). PDF/MD/Excel/JSON read from local storage, so
+      they work offline and for never-synced buckets.
+    - **Cloud chip** — a live sync-status dot in the panel toolbar (hollow =
+      not connected, green = synced, amber = syncing, red = error); clicking
+      it opens the workspace's Cloud dialog for Connect / Disconnect.
   - **OCR**: synced screenshots get their text extracted (via Drive's free OCR)
     so the bucket filter can find words *inside* your screenshots.
   - **Page helper** (current tab, armed when you open the doc panel or Quick dump —
     injected on demand, never running on other tabs in the background; toggle it
-    off in the popup):
+    off in Quick dump):
     - a **floating dock** on the right edge you can **drag up/down** (its
       position is remembered). Hover to expand its toolbar: a **📷 page**
       screenshot, a **⬚ region** screenshot (drag a rectangle right on the page),
@@ -68,7 +78,7 @@ you meant to come back to.
       paragraph — needs Google connected), and **H1 / H2 / ≔ / ¶** chips that
       save the current selection to your last-used Doc bucket. Its **×** menu
       hides the dock **until next visit**, **on this domain**, or **on all
-      websites** (re-enable from the popup toggle);
+      websites** (re-enable from the Quick dump toggle);
     - a **selection menu**: select text and a small pill appears —
       **H1 / H2 / list / ¶** — click one to save that text to your last-used Doc
       bucket, formatted as a real Heading 1/2, bullet, or paragraph in the Doc.
@@ -97,8 +107,9 @@ machine unless you connect Google — and then it goes only to your own Drive.
   which features matter, it sends **anonymous** event counts (a random id,
   event names like `install`/`active`/`feature`/`error`, version, locale) to the
   developer's Supabase backend. Never your dumps, selections, screenshots, page
-  URLs, or Google data. Toggle it off in the popup or the Cloud sync dialog. The
-  backend (schema + edge functions you self-host) lives in [`supabase/`](supabase/).
+  URLs, or Google data. Opt-out — see [docs/PRIVACY.md](docs/PRIVACY.md) for
+  exactly what's collected and how to disable it. The backend (schema + edge
+  functions you self-host) lives in [`supabase/`](supabase/).
 
 ## Install (unpacked, for development)
 
@@ -113,7 +124,7 @@ Reload the extension from that page after any code change.
 
 | File | Role |
 |------|------|
-| `manifest.json` | MV3 manifest (popup, options page, context menus, service worker, OAuth) |
+| `manifest.json` | MV3 manifest (side panel, context menus, service worker, OAuth, commands) |
 | `src/db.js` | IndexedDB layer — entry rows (append-only; edit status/notes/content; delete) |
 | `src/buckets.js` | Bucket metadata (typed: sheet/doc) in `chrome.storage.local` |
 | `src/background.js` | Service worker — right-click menu, reflex dumps, in-page new-bucket prompt, sync drain loop |
@@ -123,7 +134,14 @@ Reload the extension from that page after any code change.
 | `src/telemetry.js` | Anonymous, opt-out usage telemetry (durable batched sender) |
 | `src/sheetsSync.js` | Sheets provider — tab per bucket, row per dump keyed by entry id |
 | `src/docsSync.js` | Docs provider — doc per bucket, date headings, named-range keyed blocks |
-| `popup.html/.css/.js` | Toolbar popup with batch staging |
+| `src/markdown.js` | Tiny markdown → HTML renderer (panel preview + exports) |
+| `src/docBody.js` | Per-bucket free-form markdown body (seed, ingest, autosave) |
+| `src/capture.js` | captureVisibleTab → blob + region crop helpers |
+| `src/regionSelect.js` | Injected drag-a-region overlay |
+| `src/selectionMenu.js` | Injected page helper — selection pill + floating dock |
+| `sidepanel.html/.js` | Doc panel — markdown editor, Sheet tracker, exports, cloud chip |
+| `export.html/.js` | Print-styled page behind the doc panel's PDF export |
+| `popup.html/.css/.js` | Quick dump popup (icon right-click → small window) |
 | `dumpster.html/.css/.js` | Full-page workspace: tabs, list/board, filter, import/export, Cloud modal |
 | `newbucket.html/.js` | Fallback naming window for the context-menu New bucket flow |
 | `scripts/package.sh` | Builds the Chrome Web Store zip (`dist/`) |
