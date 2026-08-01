@@ -57,6 +57,12 @@ const els = {
   sheetAdd: document.getElementById("sheet-add"),
   sheetRows: document.getElementById("sheet-rows"),
   sheetEmpty: document.getElementById("sheet-empty"),
+  sheetBar: document.getElementById("sheet-bar"),
+  exportDoc: document.getElementById("export-doc"),
+  exportMenu: document.getElementById("export-menu"),
+  exportPdf: document.getElementById("export-pdf"),
+  exportMd: document.getElementById("export-md"),
+  exportXlsx: document.getElementById("export-xlsx"),
   toast: document.getElementById("toast"),
 };
 
@@ -123,6 +129,16 @@ async function init() {
   els.capOcr.addEventListener("click", () => onRegionCapture("ocr"));
   els.shareDoc.addEventListener("click", onShareDoc);
   els.openDoc.addEventListener("click", onOpenDoc);
+
+  // Export: PDF / Markdown for the doc, Excel for the tracker.
+  els.exportDoc.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.exportMenu.hidden = !els.exportMenu.hidden;
+  });
+  document.addEventListener("click", () => (els.exportMenu.hidden = true));
+  els.exportPdf.addEventListener("click", onExportPdf);
+  els.exportMd.addEventListener("click", onExportMd);
+  els.exportXlsx.addEventListener("click", onExportXlsx);
 
   // Live updates: new captures (from the pill/dock/hotkey/context menu) signal
   // via dumpSignal; bucket list changes keep the picker fresh.
@@ -294,6 +310,7 @@ function setKind(kind) {
   els.docBar.hidden = sheet;
   els.sheetBucket.hidden = !sheet;
   els.sheetMain.hidden = !sheet;
+  els.sheetBar.hidden = !sheet;
   chrome.storage.local.set({ panelKind });
   if (sheet) refreshSheetBuckets(activeSheet);
 }
@@ -616,6 +633,85 @@ async function onRegionCapture(kind) {
       true
     );
   }
+}
+
+// ---- Export: PDF / Markdown (doc) and Excel (tracker) ----
+// Screenshots live permanently in IndexedDB, so exports embed them straight
+// from local storage — no cloud round-trip, works offline and unsynced.
+
+function download(filename, mime, data) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+const safeName = (s) => (s || "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "dumpster";
+
+async function bucketName(id) {
+  return (await getBuckets()).find((b) => b.id === id)?.name || "Dumpster";
+}
+
+async function onExportPdf() {
+  els.exportMenu.hidden = true;
+  if (!activeBucket) return;
+  // A dedicated print-styled page; Chrome's print dialog offers "Save as PDF".
+  chrome.tabs.create({
+    url: chrome.runtime.getURL(`export.html?bucket=${encodeURIComponent(activeBucket)}`),
+  });
+  track("feature", { name: "export-pdf" });
+}
+
+const blobToDataUri = (blob) =>
+  new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(blob);
+  });
+
+async function onExportMd() {
+  els.exportMenu.hidden = true;
+  if (!activeBucket) return;
+  let md = await getBody(activeBucket);
+  // Inline each local screenshot as a data URI so the .md is self-contained.
+  const ids = [...md.matchAll(/dumpster:img:([\w-]+)/g)].map((m) => m[1]);
+  for (const id of new Set(ids)) {
+    const blob = await getImage(id);
+    const uri = blob instanceof Blob ? await blobToDataUri(blob) : "";
+    md = md.split(`dumpster:img:${id}`).join(uri);
+  }
+  download(`${safeName(await bucketName(activeBucket))}.md`, "text/markdown", md);
+  track("feature", { name: "export-md" });
+  showToast("Markdown exported ✓");
+}
+
+async function onExportXlsx() {
+  if (!activeSheet) return;
+  // Same vendored SheetJS + columns as the workspace export.
+  const XLSX = globalThis.__xlsxOverride || (await import("./vendor/xlsx.mjs"));
+  const cols = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+  const rows = (await getEntriesByBucket(activeSheet))
+    .slice()
+    .sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1))
+    .map((e) => Object.fromEntries(cols.map((c) => [c, e[c] ?? ""])));
+  const name = await bucketName(activeSheet);
+  const wb = XLSX.utils.book_new();
+  const ws = rows.length ? XLSX.utils.json_to_sheet(rows, { header: cols }) : XLSX.utils.aoa_to_sheet([cols]);
+  XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31).replace(/[\[\]*?/\\:]/g, "-") || "Sheet1");
+  const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+  download(
+    `${safeName(name)}.xlsx`,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buf
+  );
+  track("feature", { name: "export-xlsx" });
+  showToast("Excel exported ✓");
 }
 
 // ---- Share / Open Doc (bottom bar) ----

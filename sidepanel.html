@@ -246,6 +246,46 @@
         color: var(--faint);
         white-space: nowrap;
       }
+      .export-wrap {
+        position: relative;
+        flex: 1;
+        display: flex;
+      }
+      .export-wrap .secondary-btn {
+        flex: 1;
+      }
+      .export-menu {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        min-width: 130px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        z-index: 15;
+      }
+      .export-menu[hidden] {
+        display: none !important;
+      }
+      .export-menu button {
+        border: none;
+        background: none;
+        color: var(--text);
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        text-align: left;
+        padding: 8px 11px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      .export-menu button:hover {
+        background: var(--surface2);
+      }
 
       /* ---- Sheet mode: mini tracker ---- */
       .kind-switch {
@@ -475,7 +515,18 @@
     <div class="capture-bar" id="doc-bar">
       <button id="share-doc" class="secondary-btn" title="Copy the doc's Google Docs link">⇪ Share</button>
       <button id="open-doc" class="secondary-btn" title="Open this doc">↗ Open Doc</button>
+      <div class="export-wrap">
+        <button id="export-doc" class="secondary-btn" title="Export this doc">⇓ Export</button>
+        <div id="export-menu" class="export-menu" hidden>
+          <button id="export-pdf">PDF</button>
+          <button id="export-md">Markdown</button>
+        </div>
+      </div>
       <span id="save-state" class="save-state">Saved</span>
+    </div>
+
+    <div class="capture-bar" id="sheet-bar" hidden>
+      <button id="export-xlsx" class="secondary-btn" title="Export this tracker as an Excel file">⇓ Export Excel</button>
     </div>
 
     <div id="drop-overlay" class="drop-overlay" hidden>
