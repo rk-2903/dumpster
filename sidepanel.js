@@ -69,6 +69,11 @@ const els = {
   sheetExportMenu: document.getElementById("sheet-export-menu"),
   exportXlsx: document.getElementById("export-xlsx"),
   exportJson: document.getElementById("export-json"),
+  pickBackdrop: document.getElementById("pick-backdrop"),
+  pickAll: document.getElementById("pick-all"),
+  pickList: document.getElementById("pick-list"),
+  pickCancel: document.getElementById("pick-cancel"),
+  pickGo: document.getElementById("pick-go"),
   toast: document.getElementById("toast"),
 };
 
@@ -158,6 +163,17 @@ async function init() {
   els.exportJson.addEventListener("click", onExportJson);
   els.shareSheet.addEventListener("click", onShareSheet);
   els.openSheet.addEventListener("click", onOpenSheet);
+
+  // Export picker (choose which trackers go into the file).
+  els.pickAll.addEventListener("change", () => {
+    pickBoxes().forEach((b) => (b.checked = els.pickAll.checked));
+    syncPickAll();
+  });
+  els.pickCancel.addEventListener("click", closeExportPicker);
+  els.pickGo.addEventListener("click", onExportGo);
+  els.pickBackdrop.addEventListener("click", (e) => {
+    if (e.target === els.pickBackdrop) closeExportPicker();
+  });
 
   // Live updates: new captures (from the pill/dock/hotkey/context menu) signal
   // via dumpSignal; bucket list changes keep the picker fresh.
@@ -768,43 +784,113 @@ async function onOpenSheet() {
   else chrome.runtime.openOptionsPage(); // not synced — open the local table
 }
 
-// Same shape as the workspace's JSON export: { "<bucket name>": [rows…] }.
-async function onExportJson() {
+// ---- Tracker export with a bucket picker (mirrors the workspace modal) ----
+// Choosing a format opens a picker: the current tracker is listed first and
+// pre-checked; select more, or "All trackers". Multi-select exports one file —
+// Excel gets a worksheet per bucket, JSON one key per bucket.
+
+const EXPORT_COLS = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+let pickFormat = "xlsx"; // format chosen from the menu; used by the Export button
+
+function onExportXlsx() {
   els.sheetExportMenu.hidden = true;
-  if (!activeSheet) return;
-  const cols = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
-  const rows = (await getEntriesByBucket(activeSheet))
-    .slice()
-    .sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1))
-    .map((e) => Object.fromEntries(cols.map((c) => [c, e[c] ?? ""])));
-  const name = await bucketName(activeSheet);
-  download(`${safeName(name)}.json`, "application/json", JSON.stringify({ [name]: rows }, null, 2));
-  track("feature", { name: "export-json" });
-  showToast("JSON exported ✓");
+  openExportPicker("xlsx");
+}
+function onExportJson() {
+  els.sheetExportMenu.hidden = true;
+  openExportPicker("json");
 }
 
-async function onExportXlsx() {
-  els.sheetExportMenu.hidden = true;
+async function openExportPicker(format) {
   if (!activeSheet) return;
-  // Same vendored SheetJS + columns as the workspace export.
-  const XLSX = globalThis.__xlsxOverride || (await import("./vendor/xlsx.mjs"));
-  const cols = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
-  const rows = (await getEntriesByBucket(activeSheet))
+  pickFormat = format;
+  const sheets = (await getBuckets()).filter((b) => b.kind === "sheet");
+  // Current tracker first, like the workspace's export dialog.
+  sheets.sort((a, z) => (a.id === activeSheet ? -1 : z.id === activeSheet ? 1 : 0));
+  els.pickList.innerHTML = "";
+  for (const b of sheets) {
+    const item = document.createElement("label");
+    item.className = "pick-item";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = b.id;
+    cb.checked = b.id === activeSheet; // default: just the current tracker
+    cb.addEventListener("change", syncPickAll);
+    const name = document.createElement("span");
+    name.textContent = b.name;
+    item.append(cb, name);
+    if (b.id === activeSheet) {
+      const tag = document.createElement("span");
+      tag.className = "current";
+      tag.textContent = "current";
+      item.appendChild(tag);
+    }
+    els.pickList.appendChild(item);
+  }
+  els.pickAll.checked = sheets.length === 1;
+  syncPickAll();
+  els.pickBackdrop.hidden = false;
+}
+
+const pickBoxes = () => [...els.pickList.querySelectorAll("input[type=checkbox]")];
+
+function syncPickAll() {
+  const boxes = pickBoxes();
+  els.pickAll.checked = boxes.length > 0 && boxes.every((b) => b.checked);
+  els.pickGo.disabled = !boxes.some((b) => b.checked);
+}
+
+function closeExportPicker() {
+  els.pickBackdrop.hidden = true;
+}
+
+// Gather rows for one bucket, oldest-first, in the workspace's export shape.
+async function exportRows(bucketId) {
+  return (await getEntriesByBucket(bucketId))
     .slice()
     .sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1))
-    .map((e) => Object.fromEntries(cols.map((c) => [c, e[c] ?? ""])));
-  const name = await bucketName(activeSheet);
-  const wb = XLSX.utils.book_new();
-  const ws = rows.length ? XLSX.utils.json_to_sheet(rows, { header: cols }) : XLSX.utils.aoa_to_sheet([cols]);
-  XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31).replace(/[\[\]*?/\\:]/g, "-") || "Sheet1");
-  const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-  download(
-    `${safeName(name)}.xlsx`,
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    buf
-  );
-  track("feature", { name: "export-xlsx" });
-  showToast("Excel exported ✓");
+    .map((e) => Object.fromEntries(EXPORT_COLS.map((c) => [c, e[c] ?? ""])));
+}
+
+// Excel tab names: ≤31 chars, no illegal chars, deduped — as in the workspace.
+function uniqueSheetName(name, used) {
+  let base = (name || "Sheet").replace(/[\[\]*?/\\:]/g, "-").slice(0, 31) || "Sheet";
+  let candidate = base;
+  let n = 2;
+  while (used.has(candidate)) candidate = `${base.slice(0, 28)} ${n++}`;
+  used.add(candidate);
+  return candidate;
+}
+
+async function onExportGo() {
+  const ids = pickBoxes().filter((b) => b.checked).map((b) => b.value);
+  if (!ids.length) return;
+  const buckets = (await getBuckets()).filter((b) => ids.includes(b.id));
+  const data = [];
+  for (const b of buckets) data.push({ name: b.name, rows: await exportRows(b.id) });
+  const stem = data.length === 1 ? safeName(data[0].name) : "dumpster-trackers";
+
+  if (pickFormat === "json") {
+    const obj = {};
+    for (const d of data) obj[d.name] = d.rows;
+    download(`${stem}.json`, "application/json", JSON.stringify(obj, null, 2));
+    track("feature", { name: "export-json" });
+  } else {
+    const XLSX = globalThis.__xlsxOverride || (await import("./vendor/xlsx.mjs"));
+    const wb = XLSX.utils.book_new();
+    const used = new Set();
+    for (const d of data) {
+      const ws = d.rows.length
+        ? XLSX.utils.json_to_sheet(d.rows, { header: EXPORT_COLS })
+        : XLSX.utils.aoa_to_sheet([EXPORT_COLS]);
+      XLSX.utils.book_append_sheet(wb, ws, uniqueSheetName(d.name, used));
+    }
+    const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    download(`${stem}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf);
+    track("feature", { name: "export-xlsx" });
+  }
+  closeExportPicker();
+  showToast(`Exported ${data.length === 1 ? data[0].name : data.length + " trackers"} ✓`);
 }
 
 // ---- Share / Open Doc (bottom bar) ----

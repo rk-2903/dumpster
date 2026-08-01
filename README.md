@@ -45,8 +45,10 @@ you meant to come back to.
     **Word (.docx)** (via the synced Google Doc — needs Google connected), or a
     **self-contained Markdown** file (screenshots embedded as data URIs). The
     Sheet tracker's bar mirrors the doc bar — **Share / Open Sheet** (deep-link
-    to the bucket's tab) and **Export** as **Excel or JSON**, matching the
-    workspace's export formats. PDF/MD/Excel/JSON read from local storage, so
+    to the bucket's tab) and **Export** as **Excel or JSON** through the same
+    picker as the workspace dialog — the current tracker is pre-selected, and
+    you can tick more or **All trackers** for one combined file (a worksheet
+    per tracker in Excel, a key per tracker in JSON). PDF/MD/Excel/JSON read from local storage, so
     they work offline and for never-synced buckets.
     Selections and screenshots you capture on the page flow straight into the
     active doc (and still sync as entries); around them you can write anything
