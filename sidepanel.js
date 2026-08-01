@@ -501,9 +501,15 @@ async function onNewCaptures() {
   const changed = await ingestNewEntries(activeBucket);
   if (!changed) return;
   const body = await getBody(activeBucket);
-  const caret = editing ? els.editor.selectionStart : null;
-  els.editor.value = body;
-  if (caret != null) els.editor.setSelectionRange(caret, caret); // appends land below the cursor
+  if (editing && body.startsWith(els.editor.value)) {
+    // Mid-edit: append the delta through the undo-aware path so the user's
+    // Cmd/Ctrl+Z history (and cursor) survive the capture landing.
+    const at = els.editor.value.length;
+    const caret = els.editor.selectionStart;
+    replaceRange(at, at, body.slice(at), caret, caret);
+  } else {
+    els.editor.value = body; // not editing — a fresh undo history is fine
+  }
   await renderPreview();
 }
 
@@ -554,12 +560,26 @@ els?.editor?.addEventListener?.("input", () => {
 
 // ---- Toolbar editing helpers (textarea markdown) ----
 
+// Route programmatic edits through execCommand("insertText") so the
+// textarea's NATIVE undo stack survives — Cmd/Ctrl+Z then undoes toolbar
+// formatting and appended captures just like typing. Assigning .value
+// directly would wipe the history. Falls back to a plain splice where
+// execCommand is unavailable (e.g. the test harness).
 function replaceRange(start, end, text, selStart, selEnd) {
-  const v = els.editor.value;
-  els.editor.value = v.slice(0, start) + text + v.slice(end);
-  els.editor.setSelectionRange(selStart, selEnd);
   els.editor.focus();
-  els.editor.dispatchEvent(new Event("input", { bubbles: true }));
+  els.editor.setSelectionRange(start, end);
+  let inserted = false;
+  try {
+    inserted = document.execCommand("insertText", false, text);
+  } catch {
+    inserted = false;
+  }
+  if (!inserted) {
+    const v = els.editor.value;
+    els.editor.value = v.slice(0, start) + text + v.slice(end);
+    els.editor.dispatchEvent(new Event("input", { bubbles: true })); // execCommand fires this itself
+  }
+  els.editor.setSelectionRange(selStart, selEnd);
 }
 
 function wrapSelection(marker) {
