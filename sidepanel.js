@@ -74,6 +74,8 @@ const els = {
   pickList: document.getElementById("pick-list"),
   pickCancel: document.getElementById("pick-cancel"),
   pickGo: document.getElementById("pick-go"),
+  cloudOpen: document.getElementById("cloud-open"),
+  cloudDot: document.getElementById("cloud-dot"),
   toast: document.getElementById("toast"),
 };
 
@@ -196,6 +198,33 @@ async function init() {
   });
 
   setupImageDrop();
+  setupCloudChip();
+}
+
+// ---- Cloud chip: live sync status; click opens the Cloud dialog ----
+// Connect/Disconnect live in the workspace's Cloud modal — the chip deep-links
+// there (#cloud auto-opens it) and mirrors state: hollow = not connected,
+// green = synced, amber = syncing, red = sync error.
+function setupCloudChip() {
+  const apply = (conn, state) => {
+    const connected = conn?.connected === true;
+    els.cloudDot.dataset.state = !connected ? "" : state === "error" ? "error" : state === "syncing" ? "syncing" : "synced";
+    els.cloudOpen.title = !connected
+      ? "Cloud sync: not connected — click to set up"
+      : state === "error"
+        ? "Cloud sync error — click for details"
+        : state === "syncing"
+          ? "Syncing…"
+          : "Cloud sync: connected (click to manage / disconnect)";
+  };
+  chrome.storage.local.get(["gconnection", "syncState"], (o) => apply(o.gconnection, o.syncState));
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area !== "local" || (!ch.gconnection && !ch.syncState)) return;
+    chrome.storage.local.get(["gconnection", "syncState"], (o) => apply(o.gconnection, o.syncState));
+  });
+  els.cloudOpen.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("dumpster.html#cloud") });
+  });
 }
 
 // ---- Drag an image into the panel → appended at the end of the active doc ----
@@ -244,7 +273,7 @@ async function handleDrop(dt) {
   const files = [...(dt?.files || [])].filter((f) => f.type.startsWith("image/"));
   if (files.length) {
     for (const f of files) await saveEntry({ content: "", blob: f });
-    showToast(`Added ${files.length === 1 ? "image" : files.length + " images"} to the doc ✓`);
+    showToast(`Added ${files.length === 1 ? "image" : files.length + " images"} to the doc`);
     return;
   }
 
@@ -257,7 +286,7 @@ async function handleDrop(dt) {
     const blob = await res.blob();
     if (!blob.type.startsWith("image/")) throw new Error("not an image");
     await saveEntry({ content: "", blob });
-    showToast("Added image to the doc ✓");
+    showToast("Added image to the doc");
   } catch {
     // Site blocked the fetch (CORS/hotlinking) — keep the reference instead.
     await saveEntry({ content: uri });
@@ -650,14 +679,14 @@ async function onRegionCapture(kind) {
         const text = ((await createDocsProvider({ getToken }).ocrImage(crop).catch(() => "")) || "").trim();
         if (!text) return showToast("No text found in that region", true);
         await saveEntry({ content: text, format: "p" });
-        showToast("Text added to the doc ✓");
+        showToast("Text added to the doc");
       } finally {
         els.capOcr.disabled = false;
       }
       return;
     }
     await saveEntry({ content: "", blob: crop }); // image only, no caption
-    showToast("Screenshot added ✓");
+    showToast("Screenshot added");
   } catch (err) {
     console.warn(`[dumpster] panel capture failed at "${stage}":`, err);
     const detail = String(err?.message || err).slice(0, 110);
@@ -723,7 +752,7 @@ async function onExportMd() {
   }
   download(`${safeName(await bucketName(activeBucket))}.md`, "text/markdown", md);
   track("feature", { name: "export-md" });
-  showToast("Markdown exported ✓");
+  showToast("Markdown exported");
 }
 
 // DOCX comes from the synced Google Doc via Drive's export (real .docx, images
@@ -746,7 +775,7 @@ async function onExportDocx() {
     const blob = await res.blob();
     download(`${safeName(await bucketName(activeBucket))}.docx`, blob.type, blob);
     track("feature", { name: "export-docx" });
-    showToast("Word doc exported ✓");
+    showToast("Word doc exported");
   } catch (err) {
     showToast(`DOCX export failed: ${err.message}`, true);
   }
@@ -772,7 +801,7 @@ async function onShareSheet() {
   if (!url) return showToast("No cloud sheet yet — connect Google to share", true);
   try {
     await navigator.clipboard.writeText(url);
-    showToast("Sheet link copied ✓");
+    showToast("Sheet link copied");
   } catch {
     showToast(url);
   }
@@ -890,7 +919,7 @@ async function onExportGo() {
     track("feature", { name: "export-xlsx" });
   }
   closeExportPicker();
-  showToast(`Exported ${data.length === 1 ? data[0].name : data.length + " trackers"} ✓`);
+  showToast(`Exported ${data.length === 1 ? data[0].name : data.length + " trackers"}`);
 }
 
 // ---- Share / Open Doc (bottom bar) ----
@@ -912,7 +941,7 @@ async function onShareDoc() {
   if (!url) return showToast("No cloud doc yet — connect Google to share", true);
   try {
     await navigator.clipboard.writeText(url);
-    showToast("Doc link copied ✓");
+    showToast("Doc link copied");
   } catch {
     showToast(url); // clipboard blocked — at least surface the link
   }
