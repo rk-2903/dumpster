@@ -408,6 +408,43 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true; // async sendResponse
 });
 
+// ---- YouTube transcript: timestamped caption lines into the last Doc bucket ----
+// The dock sends pre-formatted "[m:ss] text" lines plus a deep-link source URL
+// (watch?v=…&t=<sec>s) so the doc entry resumes the video at that moment.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "dumpster-transcript-save") return;
+  (async () => {
+    try {
+      const text = String(msg.text || "").trim();
+      if (!text) return sendResponse({ ok: false, error: "Empty transcript" });
+      const docs = (await getBuckets()).filter((b) => b.kind === "doc");
+      if (!docs.length) return sendResponse({ ok: false, error: "No Doc bucket yet" });
+      const lastId = await getLastBucketId();
+      const bucket = docs.find((b) => b.id === lastId) || docs[0];
+      const sourceUrl = /^https?:\/\//i.test(msg.sourceUrl || "")
+        ? msg.sourceUrl
+        : sender.tab?.url || "";
+      const entry = makeEntry({
+        bucketId: bucket.id,
+        content: text,
+        sourceUrl,
+        sourceTitle: String(msg.sourceTitle || sender.tab?.title || ""),
+      });
+      entry.format = "list"; // one bullet per [m:ss] line
+      await addEntry(entry);
+      await setLastBucketId(bucket.id);
+      await signalDump();
+      await enqueueUpsert(entry.id);
+      flashBadge();
+      track("feature", { name: "yt-transcript" });
+      sendResponse({ ok: true, bucketName: bucket.name });
+    } catch (err) {
+      sendResponse({ ok: false, error: err.message });
+    }
+  })();
+  return true; // async sendResponse
+});
+
 // ---- Floating launcher: screenshot to the last-used Doc bucket ----
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== "dumpster-shot") return;

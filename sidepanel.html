@@ -286,6 +286,23 @@
       .export-menu button:hover {
         background: var(--surface2);
       }
+      /* Transcript capture: toolbar variant of the export popover, anchored
+         below the button instead of above (the toolbar sits at the top). */
+      .cap-ts-wrap {
+        position: relative;
+        display: flex;
+      }
+      .cap-ts-wrap .fmt-btn svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .export-menu.cap-ts-menu {
+        bottom: auto;
+        top: calc(100% + 6px);
+        right: 0;
+        white-space: nowrap;
+      }
 
       /* ---- Cloud status chip ---- */
       .cloud-chip {
@@ -593,6 +610,19 @@
         <span class="fmt-sep"></span>
         <button id="cap-region" class="fmt-btn" title="Screenshot a region of the page → end of doc">⬚</button>
         <button id="cap-ocr" class="fmt-btn fmt-ocr" title="Grab text from a region (OCR) → end of doc">OCR</button>
+        <div class="cap-ts-wrap">
+          <button id="cap-ts" class="fmt-btn" title="Capture the YouTube transcript (last 30s / 60s / full) → end of doc">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2.5" y="5" width="19" height="14" rx="3"/>
+              <path d="M6.5 11h4.5M14 11h3.5M6.5 14.5h7.5"/>
+            </svg>
+          </button>
+          <div id="cap-ts-menu" class="export-menu cap-ts-menu" hidden>
+            <button data-tsec="30">Last 30 seconds</button>
+            <button data-tsec="60">Last 60 seconds</button>
+            <button data-tsec="0">Full transcript</button>
+          </div>
+        </div>
         <div class="mode-tabs" role="tablist">
           <button id="mode-write" class="mode-tab" role="tab">Write</button>
           <button id="mode-preview" class="mode-tab" role="tab">Preview</button>
