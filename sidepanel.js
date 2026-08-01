@@ -14,7 +14,7 @@
 // Open Doc for the active bucket's synced Google Doc.
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
-import { addEntry, makeEntry, putImage, getImage } from "./src/db.js";
+import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, STATUSES } from "./src/db.js";
 import { enqueueUpsert } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
@@ -45,6 +45,18 @@ const els = {
   saveState: document.getElementById("save-state"),
   dropOverlay: document.getElementById("drop-overlay"),
   dropLabel: document.getElementById("drop-label"),
+  // Doc | Sheet switcher + sheet mini-tracker
+  kindDoc: document.getElementById("kind-doc"),
+  kindSheet: document.getElementById("kind-sheet"),
+  fmtRow: document.getElementById("fmt-row"),
+  docMain: document.getElementById("doc-main"),
+  docBar: document.getElementById("doc-bar"),
+  sheetBucket: document.getElementById("sheet-bucket"),
+  sheetMain: document.getElementById("sheet-main"),
+  sheetInput: document.getElementById("sheet-input"),
+  sheetAdd: document.getElementById("sheet-add"),
+  sheetRows: document.getElementById("sheet-rows"),
+  sheetEmpty: document.getElementById("sheet-empty"),
   toast: document.getElementById("toast"),
 };
 
@@ -52,6 +64,8 @@ let activeBucket = null; // id of the doc this panel edits
 let mode = "preview"; // "write" | "preview" — preview is the live view
 let saveTimer = null;
 let imageUrls = new Map(); // entryId → object URL (revoked on re-render)
+let panelKind = "doc"; // "doc" | "sheet" — which surface the panel shows
+let activeSheet = null; // id of the sheet bucket the tracker shows
 
 async function init() {
   await ensureSeeded();
@@ -62,6 +76,19 @@ async function init() {
   els.newBucket.addEventListener("click", onNewBucket);
   els.bucket.addEventListener("change", () => switchBucket(els.bucket.value));
   els.openViewer.addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+  // Doc | Sheet switcher — restore the last-used surface.
+  els.kindDoc.addEventListener("click", () => setKind("doc"));
+  els.kindSheet.addEventListener("click", () => setKind("sheet"));
+  els.sheetBucket.addEventListener("change", () => switchSheet(els.sheetBucket.value));
+  els.sheetAdd.addEventListener("click", onSheetAdd);
+  els.sheetInput.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      onSheetAdd();
+    }
+  });
+  chrome.storage.local.get("panelKind", (o) => setKind(o.panelKind === "sheet" ? "sheet" : "doc"));
 
   els.modeWrite.addEventListener("click", () => setMode("write"));
   els.modePreview.addEventListener("click", () => setMode("preview"));
@@ -101,8 +128,14 @@ async function init() {
   // via dumpSignal; bucket list changes keep the picker fresh.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.buckets) refreshBuckets(els.bucket.value);
-    if (changes.dumpSignal) onNewCaptures();
+    if (changes.buckets) {
+      refreshBuckets(els.bucket.value);
+      refreshSheetBuckets(els.sheetBucket.value);
+    }
+    if (changes.dumpSignal) {
+      onNewCaptures();
+      if (panelKind === "sheet") renderSheetRows(); // e.g. right-click dumps
+    }
   });
 
   // The icon click that opened this panel granted activeTab for the current
@@ -232,12 +265,143 @@ async function switchBucket(bucketId) {
 }
 
 async function onNewBucket() {
-  const name = prompt("Name your new Doc bucket:");
+  const sheet = panelKind === "sheet";
+  const name = prompt(`Name your new ${sheet ? "Sheet" : "Doc"} bucket:`);
   if (!name || !name.trim()) return;
-  const bucket = await addBucket(name.trim(), "doc");
+  const bucket = await addBucket(name.trim(), sheet ? "sheet" : "doc");
+  if (sheet) {
+    await refreshSheetBuckets(bucket.id);
+    els.sheetInput.focus();
+    return;
+  }
   await refreshBuckets(bucket.id);
   setMode("write");
   els.editor.focus();
+}
+
+// ---- Sheet mode: a mini tracker for Sheet buckets ----
+// Quick-add entries and flip statuses without leaving the page; the full
+// table/board stays in the workspace (↗). Rows sync exactly like any dump.
+
+function setKind(kind) {
+  panelKind = kind === "sheet" ? "sheet" : "doc";
+  const sheet = panelKind === "sheet";
+  els.kindDoc.setAttribute("aria-selected", String(!sheet));
+  els.kindSheet.setAttribute("aria-selected", String(sheet));
+  els.bucket.hidden = sheet;
+  els.fmtRow.hidden = sheet;
+  els.docMain.hidden = sheet;
+  els.docBar.hidden = sheet;
+  els.sheetBucket.hidden = !sheet;
+  els.sheetMain.hidden = !sheet;
+  chrome.storage.local.set({ panelKind });
+  if (sheet) refreshSheetBuckets(activeSheet);
+}
+
+const statusTone = (s) => (s === "Done" ? "green" : s === "In Process" ? "amber" : "gray");
+
+async function refreshSheetBuckets(selectId) {
+  const sheets = (await getBuckets()).filter((b) => b.kind === "sheet");
+  const stored = await new Promise((r) => chrome.storage.local.get("panelSheetBucket", (o) => r(o.panelSheetBucket)));
+  const chosen =
+    [selectId, activeSheet, stored].find((id) => sheets.some((b) => b.id === id)) || sheets[0]?.id;
+  els.sheetBucket.innerHTML = "";
+  for (const b of sheets) {
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.textContent = b.name;
+    els.sheetBucket.appendChild(opt);
+  }
+  els.sheetInput.disabled = !sheets.length;
+  els.sheetAdd.disabled = !sheets.length;
+  if (chosen) {
+    els.sheetBucket.value = chosen;
+    await switchSheet(chosen);
+  } else {
+    els.sheetRows.innerHTML = "";
+    els.sheetEmpty.hidden = false;
+  }
+}
+
+async function switchSheet(bucketId) {
+  if (!bucketId) return;
+  activeSheet = bucketId;
+  chrome.storage.local.set({ panelSheetBucket: bucketId });
+  await renderSheetRows();
+}
+
+async function renderSheetRows() {
+  if (!activeSheet) return;
+  const rows = (await getEntriesByBucket(activeSheet)).slice(0, 30); // newest-first
+  els.sheetRows.innerHTML = "";
+  els.sheetEmpty.hidden = rows.length > 0;
+  for (const e of rows) {
+    const row = document.createElement("div");
+    row.className = "sheet-row";
+
+    const txt = document.createElement("span");
+    txt.className = "txt";
+    if (/^https?:\/\/\S+$/.test(e.content || "")) {
+      const a = document.createElement("a");
+      a.href = e.content;
+      a.textContent = e.content;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      txt.appendChild(a);
+    } else {
+      txt.textContent = e.content || "(empty)";
+    }
+    if (e.sourceTitle || e.sourceUrl) {
+      const src = document.createElement("span");
+      src.className = "src";
+      src.textContent = e.sourceTitle || e.sourceUrl;
+      txt.appendChild(src);
+    }
+
+    const pill = document.createElement("select");
+    pill.className = "status-pill";
+    for (const s of STATUSES) {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      pill.appendChild(opt);
+    }
+    pill.value = e.status || STATUSES[0];
+    pill.dataset.tone = statusTone(pill.value);
+    pill.addEventListener("change", async () => {
+      pill.dataset.tone = statusTone(pill.value);
+      await updateEntry(e.id, { status: pill.value });
+      await enqueueUpsert(e.id);
+      await signalDump(); // live-refresh an open workspace tab
+      track("feature", { name: "panel-status" });
+    });
+
+    row.append(txt, pill);
+    els.sheetRows.appendChild(row);
+  }
+}
+
+async function onSheetAdd() {
+  const text = els.sheetInput.value.trim();
+  if (!text || !activeSheet) {
+    els.sheetInput.focus();
+    return;
+  }
+  const tab = await getActiveTab();
+  const entry = makeEntry({
+    bucketId: activeSheet,
+    content: text,
+    sourceUrl: tab?.url || "",
+    sourceTitle: tab?.title || "",
+  });
+  await addEntry(entry);
+  await setLastBucketId(activeSheet);
+  await enqueueUpsert(entry.id);
+  await signalDump();
+  els.sheetInput.value = "";
+  els.sheetInput.focus();
+  await renderSheetRows();
+  track("feature", { name: "panel-sheet-add" });
 }
 
 // New entries landed (selection pill, dock, hotkey, context menu, or our own
