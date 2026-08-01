@@ -1204,4 +1204,10 @@ function escapeHtml(s) {
   );
 }
 
-init();
+init().then(() => {
+  // Deep link from the side panel's cloud chip: open the Cloud dialog directly.
+  if (location.hash === "#cloud") {
+    history.replaceState(null, "", location.pathname); // don't re-open on reload
+    openCloudModal();
+  }
+});
