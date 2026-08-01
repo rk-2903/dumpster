@@ -413,6 +413,88 @@
         line-height: 1.5;
       }
 
+      /* ---- Export picker (choose trackers, like the workspace modal) ---- */
+      .pick-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 25;
+        background: rgba(10, 14, 20, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+      }
+      .pick-backdrop[hidden] {
+        display: none !important;
+      }
+      .pick-modal {
+        width: 100%;
+        max-width: 300px;
+        max-height: 70vh;
+        overflow-y: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .pick-modal h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .pick-all,
+      .pick-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        cursor: pointer;
+        padding: 5px 6px;
+        border-radius: 7px;
+      }
+      .pick-all:hover,
+      .pick-item:hover {
+        background: var(--surface2);
+      }
+      .pick-all {
+        border-bottom: 1px solid var(--border);
+        border-radius: 0;
+        padding-bottom: 9px;
+        font-weight: 600;
+      }
+      .pick-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .pick-item input,
+      .pick-all input {
+        accent-color: var(--accent);
+      }
+      .pick-item .current {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        border-radius: 99px;
+        padding: 1px 7px;
+      }
+      .pick-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .pick-actions .secondary-btn,
+      .pick-actions .primary-btn {
+        flex: 1;
+        padding: 8px 10px;
+        font-size: 12.5px;
+      }
+
       /* ---- Drag-and-drop image target ---- */
       .drop-overlay {
         position: fixed;
@@ -534,6 +616,21 @@
         <div id="sheet-export-menu" class="export-menu" hidden>
           <button id="export-xlsx">Excel (.xlsx)</button>
           <button id="export-json">JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pick-backdrop" class="pick-backdrop" hidden>
+      <div class="pick-modal" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+        <h3 id="pick-title">Export trackers</h3>
+        <label class="pick-all">
+          <input type="checkbox" id="pick-all" />
+          <span>All trackers</span>
+        </label>
+        <div id="pick-list" class="pick-list"></div>
+        <div class="pick-actions">
+          <button id="pick-cancel" class="secondary-btn">Cancel</button>
+          <button id="pick-go" class="primary-btn">Export</button>
         </div>
       </div>
     </div>
