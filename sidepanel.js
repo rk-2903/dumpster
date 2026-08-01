@@ -61,8 +61,14 @@ const els = {
   exportDoc: document.getElementById("export-doc"),
   exportMenu: document.getElementById("export-menu"),
   exportPdf: document.getElementById("export-pdf"),
+  exportDocx: document.getElementById("export-docx"),
   exportMd: document.getElementById("export-md"),
+  shareSheet: document.getElementById("share-sheet"),
+  openSheet: document.getElementById("open-sheet"),
+  exportSheet: document.getElementById("export-sheet"),
+  sheetExportMenu: document.getElementById("sheet-export-menu"),
   exportXlsx: document.getElementById("export-xlsx"),
+  exportJson: document.getElementById("export-json"),
   toast: document.getElementById("toast"),
 };
 
@@ -130,15 +136,28 @@ async function init() {
   els.shareDoc.addEventListener("click", onShareDoc);
   els.openDoc.addEventListener("click", onOpenDoc);
 
-  // Export: PDF / Markdown for the doc, Excel for the tracker.
+  // Export: PDF / DOCX / Markdown for the doc, Excel / JSON for the tracker.
   els.exportDoc.addEventListener("click", (e) => {
     e.stopPropagation();
+    els.sheetExportMenu.hidden = true;
     els.exportMenu.hidden = !els.exportMenu.hidden;
   });
-  document.addEventListener("click", () => (els.exportMenu.hidden = true));
+  els.exportSheet.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.exportMenu.hidden = true;
+    els.sheetExportMenu.hidden = !els.sheetExportMenu.hidden;
+  });
+  document.addEventListener("click", () => {
+    els.exportMenu.hidden = true;
+    els.sheetExportMenu.hidden = true;
+  });
   els.exportPdf.addEventListener("click", onExportPdf);
+  els.exportDocx.addEventListener("click", onExportDocx);
   els.exportMd.addEventListener("click", onExportMd);
   els.exportXlsx.addEventListener("click", onExportXlsx);
+  els.exportJson.addEventListener("click", onExportJson);
+  els.shareSheet.addEventListener("click", onShareSheet);
+  els.openSheet.addEventListener("click", onOpenSheet);
 
   // Live updates: new captures (from the pill/dock/hotkey/context menu) signal
   // via dumpSignal; bucket list changes keep the picker fresh.
@@ -691,7 +710,81 @@ async function onExportMd() {
   showToast("Markdown exported ✓");
 }
 
+// DOCX comes from the synced Google Doc via Drive's export (real .docx, images
+// included) — the one export that needs Google connected; PDF/MD stay local.
+async function onExportDocx() {
+  els.exportMenu.hidden = true;
+  if (!activeBucket) return;
+  const { connected } = await getConnection();
+  if (!connected) return showToast("Connect Google to export DOCX (PDF/MD work offline)", true);
+  const map = await new Promise((r) => chrome.storage.local.get("docsDocMap", (o) => r(o.docsDocMap || {})));
+  const docId = map[activeBucket]?.docId;
+  if (!docId) return showToast("This doc hasn't synced to Google yet — try again after sync", true);
+  try {
+    const token = await getToken(false);
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${docId}/export?mimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error(`export ${res.status}`);
+    const blob = await res.blob();
+    download(`${safeName(await bucketName(activeBucket))}.docx`, blob.type, blob);
+    track("feature", { name: "export-docx" });
+    showToast("Word doc exported ✓");
+  } catch (err) {
+    showToast(`DOCX export failed: ${err.message}`, true);
+  }
+}
+
+// ---- Sheet bar: Share / Open / Export (mirrors the doc bar) ----
+
+// All sheet buckets live as tabs in the one synced spreadsheet; deep-link to
+// this bucket's exact tab (#gid), like the workspace's "Open sheet ↗".
+function syncedSheetUrl() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get(["sheetsSpreadsheetId", "sheetsTabMap"], (o) => {
+      const sid = o.sheetsSpreadsheetId;
+      const tab = o.sheetsTabMap?.[activeSheet];
+      if (!sid || !tab) return resolve(null);
+      resolve(`https://docs.google.com/spreadsheets/d/${sid}/edit#gid=${tab.sheetId}`);
+    })
+  );
+}
+
+async function onShareSheet() {
+  const url = await syncedSheetUrl();
+  if (!url) return showToast("No cloud sheet yet — connect Google to share", true);
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Sheet link copied ✓");
+  } catch {
+    showToast(url);
+  }
+}
+
+async function onOpenSheet() {
+  const url = await syncedSheetUrl();
+  if (url) chrome.tabs.create({ url });
+  else chrome.runtime.openOptionsPage(); // not synced — open the local table
+}
+
+// Same shape as the workspace's JSON export: { "<bucket name>": [rows…] }.
+async function onExportJson() {
+  els.sheetExportMenu.hidden = true;
+  if (!activeSheet) return;
+  const cols = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+  const rows = (await getEntriesByBucket(activeSheet))
+    .slice()
+    .sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1))
+    .map((e) => Object.fromEntries(cols.map((c) => [c, e[c] ?? ""])));
+  const name = await bucketName(activeSheet);
+  download(`${safeName(name)}.json`, "application/json", JSON.stringify({ [name]: rows }, null, 2));
+  track("feature", { name: "export-json" });
+  showToast("JSON exported ✓");
+}
+
 async function onExportXlsx() {
+  els.sheetExportMenu.hidden = true;
   if (!activeSheet) return;
   // Same vendored SheetJS + columns as the workspace export.
   const XLSX = globalThis.__xlsxOverride || (await import("./vendor/xlsx.mjs"));

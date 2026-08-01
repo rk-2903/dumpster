@@ -41,10 +41,13 @@ you meant to come back to.
     as extracted paragraph text — the first use asks Chrome's one-time
     site-access prompt, required by the capture API), and GitHub-style
     **Write / Preview** tabs with a live rendered preview. **Export** sits
-    beside Share: a Doc exports as **PDF** (print-styled page → Save as PDF)
-    or a **self-contained Markdown** file (screenshots embedded as data URIs);
-    a Sheet tracker exports as **Excel**. All exports read screenshots from
-    local storage, so they work offline and for never-synced buckets.
+    beside Share: a Doc exports as **PDF** (print-styled page → Save as PDF),
+    **Word (.docx)** (via the synced Google Doc — needs Google connected), or a
+    **self-contained Markdown** file (screenshots embedded as data URIs). The
+    Sheet tracker's bar mirrors the doc bar — **Share / Open Sheet** (deep-link
+    to the bucket's tab) and **Export** as **Excel or JSON**, matching the
+    workspace's export formats. PDF/MD/Excel/JSON read from local storage, so
+    they work offline and for never-synced buckets.
     Selections and screenshots you capture on the page flow straight into the
     active doc (and still sync as entries); around them you can write anything
     in markdown — saved locally as you type. You can also **drag an image into
