@@ -74,6 +74,8 @@ const els = {
   pickList: document.getElementById("pick-list"),
   pickCancel: document.getElementById("pick-cancel"),
   pickGo: document.getElementById("pick-go"),
+  cloudOpen: document.getElementById("cloud-open"),
+  cloudDot: document.getElementById("cloud-dot"),
   toast: document.getElementById("toast"),
 };
 
@@ -196,6 +198,33 @@ async function init() {
   });
 
   setupImageDrop();
+  setupCloudChip();
+}
+
+// ---- Cloud chip: live sync status; click opens the Cloud dialog ----
+// Connect/Disconnect live in the workspace's Cloud modal — the chip deep-links
+// there (#cloud auto-opens it) and mirrors state: hollow = not connected,
+// green = synced, amber = syncing, red = sync error.
+function setupCloudChip() {
+  const apply = (conn, state) => {
+    const connected = conn?.connected === true;
+    els.cloudDot.dataset.state = !connected ? "" : state === "error" ? "error" : state === "syncing" ? "syncing" : "synced";
+    els.cloudOpen.title = !connected
+      ? "Cloud sync: not connected — click to set up"
+      : state === "error"
+        ? "Cloud sync error — click for details"
+        : state === "syncing"
+          ? "Syncing…"
+          : "Cloud sync: connected ✓ (click to manage / disconnect)";
+  };
+  chrome.storage.local.get(["gconnection", "syncState"], (o) => apply(o.gconnection, o.syncState));
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area !== "local" || (!ch.gconnection && !ch.syncState)) return;
+    chrome.storage.local.get(["gconnection", "syncState"], (o) => apply(o.gconnection, o.syncState));
+  });
+  els.cloudOpen.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("dumpster.html#cloud") });
+  });
 }
 
 // ---- Drag an image into the panel → appended at the end of the active doc ----

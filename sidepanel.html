@@ -287,6 +287,32 @@
         background: var(--surface2);
       }
 
+      /* ---- Cloud status chip ---- */
+      .cloud-chip {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cloud-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 99px;
+        background: transparent;
+        border: 1.5px solid var(--faint); /* disconnected: hollow */
+      }
+      .cloud-dot[data-state="synced"] {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .cloud-dot[data-state="syncing"] {
+        background: #f59e0b;
+        border-color: #f59e0b;
+      }
+      .cloud-dot[data-state="error"] {
+        background: var(--danger, #ef4444);
+        border-color: var(--danger, #ef4444);
+      }
+
       /* ---- Sheet mode: mini tracker ---- */
       .kind-switch {
         margin-left: 0;
@@ -547,6 +573,9 @@
         <select id="bucket" class="bucket-select" title="Active doc"></select>
         <select id="sheet-bucket" class="bucket-select" title="Active tracker" hidden></select>
         <button id="new-bucket" class="ghost-btn" title="New bucket">＋</button>
+        <button id="cloud-open" class="ghost-btn cloud-chip" title="Cloud sync">
+          <span id="cloud-dot" class="cloud-dot"></span>
+        </button>
         <button id="open-viewer" class="ghost-btn" title="Open full dumpster">↗</button>
       </div>
       <div class="fmt-row" id="fmt-row">
