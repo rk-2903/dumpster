@@ -17,6 +17,10 @@
 
     <main class="panel">
       <label class="field-label" for="bucket">Bucket</label>
+      <div class="kind-tabs" role="tablist" aria-label="Bucket type">
+        <button class="kind-tab" data-kind="sheet" role="tab" type="button">Sheet</button>
+        <button class="kind-tab" data-kind="doc" role="tab" type="button">Doc</button>
+      </div>
       <div class="bucket-row">
         <select id="bucket" class="bucket-select"></select>
         <button id="new-bucket" class="ghost-btn" title="Create a new bucket">＋</button>
@@ -31,10 +35,13 @@
         autofocus
       ></textarea>
 
-      <label class="attach">
-        <input type="checkbox" id="attach-page" checked />
-        <span id="attach-label" class="attach-label">Attach this page</span>
-      </label>
+      <div class="attach-row">
+        <label class="attach">
+          <input type="checkbox" id="attach-page" checked />
+          <span id="attach-label" class="attach-label">Attach this page</span>
+        </label>
+        <button id="shot" class="shot-btn" title="Screenshot the visible page into this Doc bucket">📸 Screenshot</button>
+      </div>
 
       <ul id="staged" class="staged" hidden></ul>
 
@@ -43,6 +50,10 @@
         <button id="submit" class="primary-btn">Dump</button>
       </div>
       <p class="hint">Tip: right-click any page, link, or selection → <b>Dump to</b>.</p>
+      <label class="setting-toggle" title="On this tab: a floating dock (screenshot region/visible) + an H1/H2/list/¶ pill when you select text">
+        <input type="checkbox" id="selection-helper" />
+        <span>Page helper: dock + selection menu</span>
+      </label>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

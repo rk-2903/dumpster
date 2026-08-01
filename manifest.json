@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dumpster",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Quick-dump links, snippets, and notes into buckets. Local-first, append-forever.",
   "permissions": [
     "contextMenus",
@@ -10,14 +10,20 @@
     "identity",
     "alarms",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "sidePanel"
   ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "host_permissions": [
     "https://sheets.googleapis.com/",
     "https://docs.googleapis.com/",
     "https://www.googleapis.com/",
-    "https://oauth2.googleapis.com/"
+    "https://oauth2.googleapis.com/",
+    "https://znerazqhztkqperaqgaw.supabase.co/"
   ],
+  "optional_host_permissions": ["<all_urls>"],
   "oauth2": {
     "//": "Replace client_id with your own OAuth 2.0 Client ID (type: Chrome Extension) from Google Cloud Console. See README > Google sync setup.",
     "client_id": "753913323279-qsob1eiaflkg8b8aq0pjlm688oi84df2.apps.googleusercontent.com",
@@ -25,13 +31,20 @@
       "https://www.googleapis.com/auth/drive.file"
     ]
   },
+  "commands": {
+    "screenshot-to-doc": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Screenshot the visible page into your last-used Doc bucket"
+    }
+  },
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Dump to a bucket",
+    "default_title": "Open Dumpster doc panel",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

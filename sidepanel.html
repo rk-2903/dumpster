@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Dumpster — Doc panel</title>
+    <style>
+      body {
+        width: auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: var(--bg);
+      }
+
+      /* ---- Fixed top toolbar ---- */
+      .doc-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        padding: 10px 12px 9px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .doc-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .doc-row .bucket-select {
+        flex: 1;
+        min-width: 0;
+        padding: 7px 10px;
+      }
+      .doc-row .ghost-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 15px;
+      }
+      .fmt-row {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        flex-wrap: nowrap;
+      }
+      .fmt-select {
+        appearance: none;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 5px 8px;
+        cursor: pointer;
+      }
+      .fmt-btn {
+        border: none;
+        background: none;
+        color: var(--muted);
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .fmt-btn:hover {
+        background: var(--surface2);
+        color: var(--text);
+      }
+      .fmt-btn.i {
+        font-style: italic;
+        font-weight: 600;
+      }
+      .fmt-btn.fmt-ocr {
+        width: auto;
+        padding: 0 7px;
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        border: 1px dashed var(--border);
+      }
+      .fmt-btn.fmt-ocr:hover {
+        border-color: var(--accent);
+      }
+      .fmt-sep {
+        width: 1px;
+        align-self: stretch;
+        margin: 3px 3px;
+        background: var(--border);
+      }
+      .mode-tabs {
+        margin-left: auto;
+        display: flex;
+        background: var(--surface2);
+        border-radius: 8px;
+        padding: 2px;
+        gap: 2px;
+      }
+      .mode-tab {
+        border: none;
+        background: none;
+        color: var(--muted);
+        font: inherit;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .mode-tab[aria-selected="true"] {
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+      }
+
+      /* ---- Editor / preview ---- */
+      .doc-main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .editor {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        border: none;
+        resize: none;
+        padding: 14px 16px 60px;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        outline: none;
+      }
+      .preview {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 14px 18px 60px;
+        font-size: 13.5px;
+        line-height: 1.65;
+        scrollbar-width: thin;
+      }
+      .preview:empty::before,
+      .preview.is-empty::before {
+        content: "Nothing here yet — write in the editor, or select text / take a screenshot on the page.";
+        color: var(--faint);
+        font-size: 12.5px;
+      }
+      .preview h1 {
+        font-size: 19px;
+        margin: 14px 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .preview h2 {
+        font-size: 16px;
+        margin: 12px 0 5px;
+      }
+      .preview h3 {
+        font-size: 14px;
+        margin: 10px 0 4px;
+      }
+      .preview p {
+        margin: 7px 0;
+      }
+      .preview ul,
+      .preview ol {
+        margin: 7px 0;
+        padding-left: 22px;
+      }
+      .preview li {
+        margin: 3px 0;
+      }
+      .preview blockquote {
+        margin: 8px 0;
+        padding: 6px 12px;
+        border-left: 3px solid var(--accent);
+        background: var(--surface2);
+        border-radius: 0 8px 8px 0;
+        color: var(--muted);
+      }
+      .preview code {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-size: 12px;
+      }
+      .preview pre {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 10px 12px;
+        overflow-x: auto;
+      }
+      .preview pre code {
+        border: none;
+        background: none;
+        padding: 0;
+      }
+      .preview img {
+        max-width: 100%;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        display: block;
+        margin: 8px 0;
+      }
+      .preview hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 14px 0;
+      }
+      .preview a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .preview a:hover {
+        text-decoration: underline;
+      }
+
+      /* ---- Bottom capture bar ---- */
+      .capture-bar {
+        border-top: 1px solid var(--border);
+        background: var(--surface2);
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .capture-bar .secondary-btn {
+        flex: 1;
+        padding: 7px 10px;
+        font-size: 12px;
+      }
+      .save-state {
+        font-size: 10.5px;
+        color: var(--faint);
+        white-space: nowrap;
+      }
+
+      /* ---- Drag-and-drop image target ---- */
+      .drop-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        backdrop-filter: blur(1.5px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        pointer-events: none; /* drops fall through to the document handlers */
+      }
+      .drop-overlay[hidden] {
+        display: none !important;
+      }
+      .drop-box {
+        width: 100%;
+        max-width: 280px;
+        border: 2px dashed var(--accent);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+        padding: 26px 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+      }
+      .drop-icon {
+        font-size: 22px;
+      }
+      #drop-label {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .drop-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="doc-toolbar">
+      <div class="doc-row">
+        <span class="logo" aria-hidden="true" style="flex: none"></span>
+        <select id="bucket" class="bucket-select" title="Active doc"></select>
+        <button id="new-bucket" class="ghost-btn" title="New Doc bucket">＋</button>
+        <button id="open-viewer" class="ghost-btn" title="Open full dumpster">↗</button>
+      </div>
+      <div class="fmt-row">
+        <select id="fmt-block" class="fmt-select" title="Paragraph style">
+          <option value="p">Normal</option>
+          <option value="h1">Heading 1</option>
+          <option value="h2">Heading 2</option>
+        </select>
+        <button id="fmt-bold" class="fmt-btn" title="Bold (**text**)">B</button>
+        <button id="fmt-italic" class="fmt-btn i" title="Italic (*text*)">I</button>
+        <button id="fmt-code" class="fmt-btn" title="Code (`text`)">‹›</button>
+        <span class="fmt-sep"></span>
+        <button id="fmt-ul" class="fmt-btn" title="Bullet list">≔</button>
+        <button id="fmt-ol" class="fmt-btn" title="Numbered list">1.</button>
+        <span class="fmt-sep"></span>
+        <button id="cap-region" class="fmt-btn" title="Screenshot a region of the page → end of doc">⬚</button>
+        <button id="cap-ocr" class="fmt-btn fmt-ocr" title="Grab text from a region (OCR) → end of doc">OCR</button>
+        <div class="mode-tabs" role="tablist">
+          <button id="mode-write" class="mode-tab" role="tab">Write</button>
+          <button id="mode-preview" class="mode-tab" role="tab">Preview</button>
+        </div>
+      </div>
+    </div>
+
+    <main class="doc-main">
+      <textarea
+        id="editor"
+        class="editor"
+        placeholder="Write in markdown… selections and screenshots from the page land here too."
+        spellcheck="false"
+        hidden
+      ></textarea>
+      <div id="preview" class="preview"></div>
+    </main>
+
+    <div class="capture-bar">
+      <button id="share-doc" class="secondary-btn" title="Copy the doc's Google Docs link">⇪ Share</button>
+      <button id="open-doc" class="secondary-btn" title="Open this doc">↗ Open Doc</button>
+      <span id="save-state" class="save-state">Saved</span>
+    </div>
+
+    <div id="drop-overlay" class="drop-overlay" hidden>
+      <div class="drop-box">
+        <span class="drop-icon">🖼</span>
+        <span id="drop-label">Drop image to add to this doc</span>
+        <span class="drop-sub">added at the end</span>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

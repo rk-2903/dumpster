@@ -14,6 +14,7 @@ import {
   countByBucket,
   updateEntry,
   deleteEntry,
+  getImage,
   STATUSES,
   DEFAULT_STATUS,
 } from "./src/db.js";
@@ -24,8 +25,10 @@ import {
   enqueueBucketOp,
 } from "./src/outbox.js";
 import { connect as gConnect, disconnect as gDisconnect, getConnection } from "./src/googleAuth.js";
+import { track, pingActive, flush } from "./src/telemetry.js";
 
 const els = {
+  bucketOpenLink: document.getElementById("bucket-open-link"),
   sheetTabs: document.getElementById("sheet-tabs"),
   docTabs: document.getElementById("doc-tabs"),
   addSheet: document.getElementById("add-sheet"),
@@ -41,6 +44,7 @@ const els = {
   viewToggle: document.getElementById("view-toggle"),
   listView: document.getElementById("list-view"),
   board: document.getElementById("board-view"),
+  docView: document.getElementById("doc-view"),
   // Export modal
   exportOpen: document.getElementById("export-open"),
   exportModal: document.getElementById("export-modal"),
@@ -73,13 +77,19 @@ const els = {
 let activeBucketId = null;
 let activeBucketKind = "sheet"; // doc buckets have no status/board
 let currentEntries = []; // entries for the active bucket (unfiltered)
-let currentView = "list"; // "list" | "board"
+let currentView = "list"; // "list" | "board" | "document"
+// Remembered view per bucket kind (doc buckets default to the Document preview).
+let viewPref = { sheet: "list", doc: "document" };
+const VIEW_LABELS = { document: "Document", list: "List", board: "Board" };
+const kindViews = (kind) => (kind === "doc" ? ["document", "list"] : ["list", "board"]);
 
 async function init() {
   await ensureSeeded();
+  pingActive(); // opening the workspace counts as active-today
+  flush();
   await migrateStatuses();
-  currentView = (await getSetting("viewMode")) === "board" ? "board" : "list";
-  syncViewToggle();
+  const savedPref = await getSetting("viewPref");
+  if (savedPref) viewPref = { ...viewPref, ...savedPref };
   activeBucketId = await getLastBucketId();
   await renderTabs();
   await renderBucket();
@@ -164,11 +174,55 @@ async function renderBucket() {
   const bucket = buckets.find((b) => b.id === activeBucketId);
   els.bucketName.textContent = bucket ? bucket.name : "—";
   activeBucketKind = bucket?.kind === "doc" ? "doc" : "sheet";
-  // Doc buckets are documentation: no workflow status, so no Board view either.
-  els.viewToggle.hidden = activeBucketKind === "doc";
+  await renderBucketOpenLink(bucket);
   els.table.classList.toggle("no-status", activeBucketKind === "doc");
+  // Doc buckets: Document | List. Sheet buckets: List | Board.
+  const views = kindViews(activeBucketKind);
+  currentView = views.includes(viewPref[activeBucketKind]) ? viewPref[activeBucketKind] : views[0];
+  renderViewToggle(activeBucketKind);
+  els.viewToggle.hidden = false;
   currentEntries = bucket ? await getEntriesByBucket(bucket.id) : [];
   renderView();
+}
+
+function renderViewToggle(kind) {
+  els.viewToggle.innerHTML = "";
+  for (const v of kindViews(kind)) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "seg" + (v === currentView ? " active" : "");
+    btn.dataset.view = v;
+    btn.textContent = VIEW_LABELS[v];
+    els.viewToggle.appendChild(btn);
+  }
+}
+
+// "Open doc ↗" / "Open sheet ↗" next to the bucket heading — links straight to
+// this bucket's synced Google Doc, or its exact spreadsheet tab (#gid). Hidden
+// until the bucket has actually synced (its file/tab exists).
+async function renderBucketOpenLink(bucket) {
+  const link = els.bucketOpenLink;
+  link.hidden = true;
+  if (!bucket) return;
+  if (bucket.kind === "doc") {
+    const map = (await getSetting("docsDocMap")) || {};
+    const d = map[bucket.id];
+    if (d) {
+      link.href = `https://docs.google.com/document/d/${d.docId}/edit`;
+      link.textContent = "Open doc ↗";
+      link.title = "Open this bucket's Google Doc";
+      link.hidden = false;
+    }
+  } else {
+    const sid = await getSetting("sheetsSpreadsheetId");
+    const tab = ((await getSetting("sheetsTabMap")) || {})[bucket.id];
+    if (sid && tab) {
+      link.href = `https://docs.google.com/spreadsheets/d/${sid}/edit#gid=${tab.sheetId}`;
+      link.textContent = "Open sheet ↗";
+      link.title = "Open this bucket's tab in the Google Sheet";
+      link.hidden = false;
+    }
+  }
 }
 
 // Entries matching the current search box.
@@ -176,7 +230,10 @@ function visibleEntries() {
   const q = els.search.value.trim().toLowerCase();
   if (!q) return currentEntries;
   return currentEntries.filter((e) =>
-    [e.content, e.sourceTitle, e.sourceUrl, e.status, e.notes].join(" ").toLowerCase().includes(q)
+    [e.content, e.sourceTitle, e.sourceUrl, e.status, e.notes, e.ocrText || ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(q)
   );
 }
 
@@ -194,14 +251,142 @@ function updateCount(shown) {
 function renderView() {
   const entries = visibleEntries();
   updateCount(entries.length);
-  const board = currentView === "board" && activeBucketKind !== "doc";
-  els.listView.hidden = board;
-  els.board.hidden = !board;
-  if (board) renderBoard(entries);
+  els.listView.hidden = currentView !== "list";
+  els.board.hidden = currentView !== "board";
+  els.docView.hidden = currentView !== "document";
+  if (currentView === "board") renderBoard(entries);
+  else if (currentView === "document") renderDocument(entries);
   else renderList(entries);
 }
 
+// ---- Document view (read-only rendered preview of the Doc bucket) ----
+
+function formatDocDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? "Undated"
+    : d.toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" });
+}
+
+function docContentInto(container, entry) {
+  if (entry.hasImage) {
+    const img = document.createElement("img");
+    img.className = "doc-img";
+    img.alt = "Screenshot";
+    img.title = "Click to view full size";
+    getImage(entry.id).then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      thumbUrls.add(url);
+      img.src = url;
+    });
+    img.addEventListener("click", () => openLightbox(entry.id));
+    container.appendChild(img);
+  }
+  container.appendChild(linkify(entry.content));
+}
+
+function uniqueRefs(entries) {
+  const seen = new Set();
+  const out = [];
+  for (const e of entries) {
+    const key = (e.sourceUrl || e.sourceTitle || "").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ url: e.sourceUrl || "", title: e.sourceTitle || "" });
+  }
+  return out;
+}
+
+function renderDocument(entries) {
+  revokeThumbs();
+  els.docView.innerHTML = "";
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.innerHTML = "Nothing here yet. Dump text or screenshots into this Doc bucket.";
+    els.docView.appendChild(empty);
+    return;
+  }
+
+  const ordered = [...entries].sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1));
+  const article = document.createElement("article");
+  article.className = "doc-article";
+
+  let lastDate = null;
+  let listEl = null; // open <ul> collecting consecutive list items
+  for (const entry of ordered) {
+    const date = formatDocDate(entry.createdAt);
+    if (date !== lastDate) {
+      lastDate = date;
+      listEl = null;
+      const h = document.createElement("div");
+      h.className = "doc-date";
+      h.textContent = date;
+      article.appendChild(h);
+    }
+
+    if (entry.format === "list") {
+      if (!listEl) {
+        listEl = document.createElement("ul");
+        listEl.className = "doc-list";
+        article.appendChild(listEl);
+      }
+      const li = document.createElement("li");
+      docContentInto(li, entry);
+      if (entry.notes) {
+        const n = document.createElement("span");
+        n.className = "doc-notes";
+        n.textContent = `  ${entry.notes}`;
+        li.appendChild(n);
+      }
+      listEl.appendChild(li);
+      continue;
+    }
+
+    listEl = null;
+    const tag = entry.format === "h1" ? "h1" : entry.format === "h2" ? "h2" : "p";
+    const node = document.createElement(tag);
+    node.className = "doc-block";
+    docContentInto(node, entry);
+    article.appendChild(node);
+    if (entry.notes) {
+      const n = document.createElement("p");
+      n.className = "doc-notes";
+      n.textContent = entry.notes;
+      article.appendChild(n);
+    }
+  }
+
+  const refs = uniqueRefs(ordered);
+  if (refs.length) {
+    const h = document.createElement("div");
+    h.className = "doc-date doc-refs-head";
+    h.textContent = "References";
+    article.appendChild(h);
+    const ul = document.createElement("ul");
+    ul.className = "doc-refs";
+    for (const ref of refs) {
+      const li = document.createElement("li");
+      if (ref.url) {
+        const a = document.createElement("a");
+        a.href = ref.url;
+        a.target = "_blank";
+        a.rel = "noreferrer";
+        a.textContent = ref.title || ref.url;
+        li.appendChild(a);
+      } else {
+        li.textContent = ref.title;
+      }
+      ul.appendChild(li);
+    }
+    article.appendChild(ul);
+  }
+  els.docView.appendChild(article);
+}
+
 function renderList(entries) {
+  revokeThumbs();
   els.rows.innerHTML = "";
   els.table.hidden = entries.length === 0;
   els.empty.hidden = entries.length !== 0;
@@ -317,6 +502,7 @@ function wireDropTarget(col, status) {
     entry.status = status;
     await updateEntry(id, { status });
     enqueueUpsert(id);
+    track("feature", { name: "board-move" });
     renderView(); // re-render board so cards + counts move
   });
 }
@@ -325,15 +511,10 @@ function onToggleView(e) {
   const btn = e.target.closest(".seg");
   if (!btn || btn.dataset.view === currentView) return;
   currentView = btn.dataset.view;
-  setSetting("viewMode", currentView);
-  syncViewToggle();
+  viewPref[activeBucketKind] = currentView;
+  setSetting("viewPref", viewPref);
+  renderViewToggle(activeBucketKind);
   renderView();
-}
-
-function syncViewToggle() {
-  [...els.viewToggle.children].forEach((s) =>
-    s.classList.toggle("active", s.dataset.view === currentView)
-  );
 }
 
 function getSetting(key) {
@@ -397,16 +578,62 @@ function renderRow(entry) {
   return tr;
 }
 
+// Object URLs for row thumbnails, revoked whenever the list re-renders.
+const thumbUrls = new Set();
+function revokeThumbs() {
+  for (const u of thumbUrls) URL.revokeObjectURL(u);
+  thumbUrls.clear();
+}
+
 // The dumped text: linkified read-only view, double-click to edit inline.
+// Entries with a screenshot get a clickable thumbnail above the text.
 function renderContentView(td, entry) {
   td.textContent = "";
   td.title = "Double-click to edit";
+  if (entry.hasImage) {
+    const img = document.createElement("img");
+    img.className = "cell-thumb";
+    img.alt = "Screenshot";
+    img.title = "Click to view full size";
+    getImage(entry.id).then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      thumbUrls.add(url);
+      img.src = url;
+    });
+    img.addEventListener("click", () => openLightbox(entry.id));
+    td.appendChild(img);
+  }
   td.appendChild(linkify(entry.content));
   td.ondblclick = (e) => {
-    // Don't hijack a click meant for a link.
-    if (e.target.tagName === "A") return;
+    // Don't hijack a click meant for a link or the thumbnail.
+    if (e.target.tagName === "A" || e.target.tagName === "IMG") return;
     editContent(td, entry);
   };
+}
+
+// Full-size screenshot overlay; click anywhere or Esc closes.
+async function openLightbox(entryId) {
+  const blob = await getImage(entryId);
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const backdrop = document.createElement("div");
+  backdrop.className = "lightbox";
+  const img = document.createElement("img");
+  img.src = url;
+  img.alt = "Screenshot";
+  backdrop.appendChild(img);
+  const close = () => {
+    URL.revokeObjectURL(url);
+    backdrop.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  backdrop.addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(backdrop);
 }
 
 function editContent(td, entry) {
@@ -669,6 +896,7 @@ async function doExport() {
     const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
     download(`dumpster-${stamp()}.xlsx`, XLSX_MIME, buf);
   }
+  track("feature", { name: exportFormat === "json" ? "export-json" : "export-xlsx" });
   closeExportModal();
 }
 
@@ -913,6 +1141,7 @@ async function onConnect() {
   label.textContent = "Connecting…";
   try {
     await gConnect(); // interactive OAuth via chrome.identity
+    track("feature", { name: "connect" });
     // Backfill: queue all existing dumps so current data lands in the target.
     await backfillAll();
     await refreshCloudModal();
