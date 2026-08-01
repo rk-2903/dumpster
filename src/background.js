@@ -293,7 +293,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 function flashBadge() {
   chrome.action.setBadgeBackgroundColor({ color: "#10b981" });
-  chrome.action.setBadgeText({ text: "✓" });
+  chrome.action.setBadgeText({ text: "" });
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 1500);
 }
 

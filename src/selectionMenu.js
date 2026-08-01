@@ -293,7 +293,7 @@
       { type: "dumpster-selection-save", format: btn.dataset.format, text: currentText },
       (res) => {
         if (chrome.runtime.lastError) return showNote("Dumpster reloaded — try again");
-        showNote(res?.ok ? `✓ Saved to ${res.bucketName}` : res?.error || "Failed");
+        showNote(res?.ok ? `Saved to ${res.bucketName}` : res?.error || "Failed");
       }
     );
   });
@@ -492,7 +492,7 @@
       { type: "dumpster-selection-save", format, text },
       (res) => {
         if (chrome.runtime.lastError) return launcherNote("Reloaded — try again");
-        launcherNote(res?.ok ? `✓ Saved to ${res.bucketName}` : res?.error || "Failed");
+        launcherNote(res?.ok ? `Saved to ${res.bucketName}` : res?.error || "Failed");
       }
     );
   }
@@ -515,7 +515,7 @@
         host.style.visibility = "";
         if (chrome.runtime.lastError) return launcherNote("Reloaded — try again");
         if (res?.cancelled) return;
-        launcherNote(res?.ok ? `✓ Saved to ${res.bucketName}` : res?.error || "Failed");
+        launcherNote(res?.ok ? `Saved to ${res.bucketName}` : res?.error || "Failed");
       });
     }, 60);
   }

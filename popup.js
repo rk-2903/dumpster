@@ -312,7 +312,7 @@ async function onSubmit() {
   els.content.value = "";
   renderStaged();
   updateSubmitState();
-  showToast(`Dumped ${entries.length} ✓`);
+  showToast(`Dumped ${entries.length}`);
   setTimeout(() => window.close(), 700);
 }
 
