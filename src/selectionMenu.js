@@ -345,7 +345,14 @@
         `<text x="12" y="14.5" font-size="7" font-weight="800" text-anchor="middle" ` +
         `fill="currentColor" stroke="none">OCR</text>`
     ),
+    transcript: SVG(
+      `<rect x="2.5" y="5" width="19" height="14" rx="3"/>` +
+        `<path d="M6.5 11h4.5M14 11h3.5M6.5 14.5h7.5"/>`
+    ),
   };
+
+  // YouTube transcript capture is only offered on YouTube itself.
+  const IS_YOUTUBE = /(^|\.)youtube\.com$/i.test(location.hostname);
 
   // Region selection drawn *in the page* by this content script — no injection,
   // so it always appears. Resolves {x,y,width,height,dpr} or null (Esc / tiny).
@@ -433,6 +440,19 @@
       hideMenu.appendChild(b);
     }
 
+    const tsMenu = document.createElement("div");
+    tsMenu.className = "l-hide-menu l-ts-menu";
+    for (const o of [
+      { sec: 30, label: "Last 30 seconds" },
+      { sec: 60, label: "Last 60 seconds" },
+      { sec: 0, label: "Full transcript" },
+    ]) {
+      const b = document.createElement("button");
+      b.dataset.tsec = String(o.sec);
+      b.textContent = o.label;
+      tsMenu.appendChild(b);
+    }
+
     const menu = document.createElement("div");
     menu.className = "l-menu";
     const items = [
@@ -440,6 +460,14 @@
       { kind: "icon", mode: "region", title: "Screenshot a selected region", svg: ICON.region },
       { kind: "icon", mode: "ocr", title: "Grab text from a region (OCR → paragraph)", svg: ICON.ocr },
      ];
+    if (IS_YOUTUBE) {
+      items.push({
+        kind: "icon",
+        mode: "transcript",
+        title: "Capture the video transcript (last 30s / 60s / full)",
+        svg: ICON.transcript,
+      });
+    }
     for (const it of items) {
       if (it.kind === "sep") {
         const s = document.createElement("div");
@@ -468,8 +496,8 @@
     logo.className = "l-logo";
     icon.appendChild(logo);
 
-    // close + hide popover, then menu (expands leftward), then edge handle
-    launcher.append(close, hideMenu, menu, icon);
+    // close + popovers, then menu (expands leftward), then edge handle
+    launcher.append(close, hideMenu, tsMenu, menu, icon);
   }
   renderLauncher();
   root.appendChild(launcher);
@@ -520,6 +548,141 @@
     }, 60);
   }
 
+  // ---- YouTube transcript capture ----
+  // YouTube's caption endpoints (timedtext / get_transcript) now require a
+  // bot-guard "pot" token that only the page's own player can mint, so we read
+  // the transcript exactly the way a user would: open the "Show transcript"
+  // panel, scrape its segments, and close it again if we opened it.
+  const tsCache = { videoId: null, cues: null };
+  const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function ytVideoId() {
+    try {
+      const u = new URL(location.href);
+      const v = u.searchParams.get("v");
+      if (v) return v;
+      const m = u.pathname.match(/^\/(?:shorts|live|embed)\/([\w-]{6,})/);
+      return m ? m[1] : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const TS_PANEL = 'ytd-engagement-panel-section-list-renderer[target-id*="transcript"]';
+  // New UI renders transcript-segment-view-model; older UI used
+  // ytd-transcript-segment-renderer — support both.
+  const segEls = () =>
+    document.querySelectorAll("transcript-segment-view-model, ytd-transcript-segment-renderer");
+
+  function tsToSec(s) {
+    const p = String(s).split(":").map(Number);
+    if (p.some(Number.isNaN)) return null;
+    return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1];
+  }
+
+  function scrapeCues() {
+    const cues = [];
+    for (const el of segEls()) {
+      const tEl = el.querySelector(
+        '[class*="Timestamp"]:not([class*="A11y" i]), .segment-timestamp'
+      );
+      const xEl = el.querySelector('[role="text"], .segment-text');
+      const t = tEl ? tsToSec(tEl.textContent.trim()) : null;
+      const text = xEl ? xEl.textContent.replace(/\s+/g, " ").trim() : "";
+      if (t != null && text) cues.push({ t, text });
+    }
+    return cues;
+  }
+
+  async function loadTranscript(videoId) {
+    if (tsCache.videoId === videoId && tsCache.cues) return tsCache.cues;
+    const panel = document.querySelector(TS_PANEL);
+    const panelHidden =
+      !panel || panel.getAttribute("visibility") === "ENGAGEMENT_PANEL_VISIBILITY_HIDDEN";
+    let opened = false;
+    if (panelHidden || !segEls().length) {
+      const btn =
+        document.querySelector("ytd-video-description-transcript-section-renderer button") ||
+        [...document.querySelectorAll("button")].find((b) =>
+          /transcript/i.test(b.getAttribute("aria-label") || "")
+        );
+      if (!btn) return null; // video has no transcript
+      btn.click();
+      opened = true;
+      for (let i = 0; i < 40 && !segEls().length; i++) await sleepMs(150);
+    }
+    const cues = scrapeCues();
+    if (opened) {
+      document.querySelector(TS_PANEL + " #visibility-button button")?.click();
+    }
+    if (!cues.length) return null;
+    tsCache.videoId = videoId;
+    tsCache.cues = cues;
+    return cues;
+  }
+
+  function fmtTime(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = String(sec % 60).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+  }
+
+  // Merge consecutive cues (ASR ones are tiny) into readable [m:ss]-stamped
+  // lines; one line becomes one bullet in the doc.
+  function cuesToLines(cues) {
+    const blocks = [];
+    let cur = null;
+    for (const c of cues) {
+      if (!cur || c.t - cur.start >= 12 || cur.text.length + c.text.length > 280) {
+        cur = { start: c.t, text: c.text };
+        blocks.push(cur);
+      } else {
+        cur.text += " " + c.text;
+      }
+    }
+    return blocks.map((b) => `[${fmtTime(b.start)}] ${b.text}`);
+  }
+
+  // windowSec = 0/null → full transcript.
+  async function grabTranscript(windowSec) {
+    const videoId = ytVideoId();
+    if (!videoId) return launcherNote("Open a video first");
+    launcherNote("Grabbing transcript…");
+    let cues;
+    try {
+      cues = await loadTranscript(videoId);
+    } catch {
+      cues = null;
+    }
+    if (!cues) return launcherNote("No transcript on this video");
+    let picked = cues;
+    let startSec = 0;
+    if (windowSec) {
+      const video = document.querySelector("video");
+      const now = video ? video.currentTime : 0;
+      picked = cues.filter((c) => c.t >= now - windowSec && c.t <= now);
+      if (!picked.length) return launcherNote(`Nothing said in the last ${windowSec}s`);
+      startSec = Math.floor(picked[0].t);
+    }
+    const text = cuesToLines(picked).join("\n");
+    const sourceUrl =
+      "https://www.youtube.com/watch?v=" + encodeURIComponent(videoId) + "&t=" + startSec + "s";
+    chrome.runtime.sendMessage(
+      {
+        type: "dumpster-transcript-save",
+        text,
+        sourceUrl,
+        sourceTitle: document.title.replace(/ - YouTube$/, ""),
+      },
+      (res) => {
+        if (chrome.runtime.lastError) return launcherNote("Reloaded — try again");
+        launcherNote(res?.ok ? `Saved to ${res.bucketName}` : res?.error || "Failed");
+      }
+    );
+  }
+
   function applyHide(act) {
     if (act === "session") {
       try {
@@ -539,7 +702,8 @@
     if (e.target.closest?.(".l-close")) {
       e.preventDefault();
       e.stopPropagation();
-      root.querySelector(".l-hide-menu")?.classList.toggle("open");
+      root.querySelector(".l-ts-menu")?.classList.remove("open");
+      root.querySelector(".l-hide-menu:not(.l-ts-menu)")?.classList.toggle("open");
       return;
     }
     const hideBtn = e.target.closest?.("button[data-hide]");
@@ -547,6 +711,14 @@
       e.preventDefault();
       e.stopPropagation();
       applyHide(hideBtn.dataset.hide);
+      return;
+    }
+    const tsBtn = e.target.closest?.("button[data-tsec]");
+    if (tsBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      root.querySelector(".l-ts-menu")?.classList.remove("open");
+      grabTranscript(Number(tsBtn.dataset.tsec) || 0);
       return;
     }
     const fmtBtn = e.target.closest?.("button[data-format]");
@@ -560,6 +732,11 @@
     if (shotBtn) {
       e.preventDefault();
       e.stopPropagation();
+      if (shotBtn.dataset.mode === "transcript") {
+        root.querySelector(".l-hide-menu:not(.l-ts-menu)")?.classList.remove("open");
+        root.querySelector(".l-ts-menu")?.classList.toggle("open");
+        return;
+      }
       takeShot(shotBtn.dataset.mode);
     }
   });
