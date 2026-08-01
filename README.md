@@ -40,7 +40,8 @@ you meant to come back to.
       and **OCR** capture buttons (both drop a drag-rectangle on the page; the
       crop lands at the end of the doc as an image or extracted paragraph text
       — first use asks Chrome's one-time site-access prompt, required by the
-      capture API), and GitHub-style **Write / Preview** tabs with a live
+      capture API), a **YouTube transcript** button (last 30s / 60s / full,
+      timestamped — same as the dock's), and GitHub-style **Write / Preview** tabs with a live
       rendered preview (**double-click the preview** to jump into edit mode).
       Selections and screenshots you capture on the page flow straight into
       the active doc (and still sync as entries); around them you can write
