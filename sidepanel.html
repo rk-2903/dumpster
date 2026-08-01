@@ -519,6 +519,7 @@
         <button id="export-doc" class="secondary-btn" title="Export this doc">⇓ Export</button>
         <div id="export-menu" class="export-menu" hidden>
           <button id="export-pdf">PDF</button>
+          <button id="export-docx">Word (.docx)</button>
           <button id="export-md">Markdown</button>
         </div>
       </div>
@@ -526,7 +527,15 @@
     </div>
 
     <div class="capture-bar" id="sheet-bar" hidden>
-      <button id="export-xlsx" class="secondary-btn" title="Export this tracker as an Excel file">⇓ Export Excel</button>
+      <button id="share-sheet" class="secondary-btn" title="Copy the tracker's Google Sheet link">⇪ Share</button>
+      <button id="open-sheet" class="secondary-btn" title="Open this tracker's sheet">↗ Open Sheet</button>
+      <div class="export-wrap">
+        <button id="export-sheet" class="secondary-btn" title="Export this tracker">⇓ Export</button>
+        <div id="sheet-export-menu" class="export-menu" hidden>
+          <button id="export-xlsx">Excel (.xlsx)</button>
+          <button id="export-json">JSON</button>
+        </div>
+      </div>
     </div>
 
     <div id="drop-overlay" class="drop-overlay" hidden>
