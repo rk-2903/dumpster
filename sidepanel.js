@@ -14,7 +14,7 @@
 // Open Doc for the active bucket's synced Google Doc.
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
-import { addEntry, makeEntry, putImage, getImage } from "./src/db.js";
+import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, STATUSES } from "./src/db.js";
 import { enqueueUpsert } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
@@ -45,6 +45,35 @@ const els = {
   saveState: document.getElementById("save-state"),
   dropOverlay: document.getElementById("drop-overlay"),
   dropLabel: document.getElementById("drop-label"),
+  // Doc | Sheet switcher + sheet mini-tracker
+  kindDoc: document.getElementById("kind-doc"),
+  kindSheet: document.getElementById("kind-sheet"),
+  fmtRow: document.getElementById("fmt-row"),
+  docMain: document.getElementById("doc-main"),
+  docBar: document.getElementById("doc-bar"),
+  sheetBucket: document.getElementById("sheet-bucket"),
+  sheetMain: document.getElementById("sheet-main"),
+  sheetInput: document.getElementById("sheet-input"),
+  sheetAdd: document.getElementById("sheet-add"),
+  sheetRows: document.getElementById("sheet-rows"),
+  sheetEmpty: document.getElementById("sheet-empty"),
+  sheetBar: document.getElementById("sheet-bar"),
+  exportDoc: document.getElementById("export-doc"),
+  exportMenu: document.getElementById("export-menu"),
+  exportPdf: document.getElementById("export-pdf"),
+  exportDocx: document.getElementById("export-docx"),
+  exportMd: document.getElementById("export-md"),
+  shareSheet: document.getElementById("share-sheet"),
+  openSheet: document.getElementById("open-sheet"),
+  exportSheet: document.getElementById("export-sheet"),
+  sheetExportMenu: document.getElementById("sheet-export-menu"),
+  exportXlsx: document.getElementById("export-xlsx"),
+  exportJson: document.getElementById("export-json"),
+  pickBackdrop: document.getElementById("pick-backdrop"),
+  pickAll: document.getElementById("pick-all"),
+  pickList: document.getElementById("pick-list"),
+  pickCancel: document.getElementById("pick-cancel"),
+  pickGo: document.getElementById("pick-go"),
   toast: document.getElementById("toast"),
 };
 
@@ -52,6 +81,8 @@ let activeBucket = null; // id of the doc this panel edits
 let mode = "preview"; // "write" | "preview" — preview is the live view
 let saveTimer = null;
 let imageUrls = new Map(); // entryId → object URL (revoked on re-render)
+let panelKind = "doc"; // "doc" | "sheet" — which surface the panel shows
+let activeSheet = null; // id of the sheet bucket the tracker shows
 
 async function init() {
   await ensureSeeded();
@@ -62,6 +93,19 @@ async function init() {
   els.newBucket.addEventListener("click", onNewBucket);
   els.bucket.addEventListener("change", () => switchBucket(els.bucket.value));
   els.openViewer.addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+  // Doc | Sheet switcher — restore the last-used surface.
+  els.kindDoc.addEventListener("click", () => setKind("doc"));
+  els.kindSheet.addEventListener("click", () => setKind("sheet"));
+  els.sheetBucket.addEventListener("change", () => switchSheet(els.sheetBucket.value));
+  els.sheetAdd.addEventListener("click", onSheetAdd);
+  els.sheetInput.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      onSheetAdd();
+    }
+  });
+  chrome.storage.local.get("panelKind", (o) => setKind(o.panelKind === "sheet" ? "sheet" : "doc"));
 
   els.modeWrite.addEventListener("click", () => setMode("write"));
   els.modePreview.addEventListener("click", () => setMode("preview"));
@@ -97,12 +141,52 @@ async function init() {
   els.shareDoc.addEventListener("click", onShareDoc);
   els.openDoc.addEventListener("click", onOpenDoc);
 
+  // Export: PDF / DOCX / Markdown for the doc, Excel / JSON for the tracker.
+  els.exportDoc.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.sheetExportMenu.hidden = true;
+    els.exportMenu.hidden = !els.exportMenu.hidden;
+  });
+  els.exportSheet.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.exportMenu.hidden = true;
+    els.sheetExportMenu.hidden = !els.sheetExportMenu.hidden;
+  });
+  document.addEventListener("click", () => {
+    els.exportMenu.hidden = true;
+    els.sheetExportMenu.hidden = true;
+  });
+  els.exportPdf.addEventListener("click", onExportPdf);
+  els.exportDocx.addEventListener("click", onExportDocx);
+  els.exportMd.addEventListener("click", onExportMd);
+  els.exportXlsx.addEventListener("click", onExportXlsx);
+  els.exportJson.addEventListener("click", onExportJson);
+  els.shareSheet.addEventListener("click", onShareSheet);
+  els.openSheet.addEventListener("click", onOpenSheet);
+
+  // Export picker (choose which trackers go into the file).
+  els.pickAll.addEventListener("change", () => {
+    pickBoxes().forEach((b) => (b.checked = els.pickAll.checked));
+    syncPickAll();
+  });
+  els.pickCancel.addEventListener("click", closeExportPicker);
+  els.pickGo.addEventListener("click", onExportGo);
+  els.pickBackdrop.addEventListener("click", (e) => {
+    if (e.target === els.pickBackdrop) closeExportPicker();
+  });
+
   // Live updates: new captures (from the pill/dock/hotkey/context menu) signal
   // via dumpSignal; bucket list changes keep the picker fresh.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.buckets) refreshBuckets(els.bucket.value);
-    if (changes.dumpSignal) onNewCaptures();
+    if (changes.buckets) {
+      refreshBuckets(els.bucket.value);
+      refreshSheetBuckets(els.sheetBucket.value);
+    }
+    if (changes.dumpSignal) {
+      onNewCaptures();
+      if (panelKind === "sheet") renderSheetRows(); // e.g. right-click dumps
+    }
   });
 
   // The icon click that opened this panel granted activeTab for the current
@@ -232,12 +316,144 @@ async function switchBucket(bucketId) {
 }
 
 async function onNewBucket() {
-  const name = prompt("Name your new Doc bucket:");
+  const sheet = panelKind === "sheet";
+  const name = prompt(`Name your new ${sheet ? "Sheet" : "Doc"} bucket:`);
   if (!name || !name.trim()) return;
-  const bucket = await addBucket(name.trim(), "doc");
+  const bucket = await addBucket(name.trim(), sheet ? "sheet" : "doc");
+  if (sheet) {
+    await refreshSheetBuckets(bucket.id);
+    els.sheetInput.focus();
+    return;
+  }
   await refreshBuckets(bucket.id);
   setMode("write");
   els.editor.focus();
+}
+
+// ---- Sheet mode: a mini tracker for Sheet buckets ----
+// Quick-add entries and flip statuses without leaving the page; the full
+// table/board stays in the workspace (↗). Rows sync exactly like any dump.
+
+function setKind(kind) {
+  panelKind = kind === "sheet" ? "sheet" : "doc";
+  const sheet = panelKind === "sheet";
+  els.kindDoc.setAttribute("aria-selected", String(!sheet));
+  els.kindSheet.setAttribute("aria-selected", String(sheet));
+  els.bucket.hidden = sheet;
+  els.fmtRow.hidden = sheet;
+  els.docMain.hidden = sheet;
+  els.docBar.hidden = sheet;
+  els.sheetBucket.hidden = !sheet;
+  els.sheetMain.hidden = !sheet;
+  els.sheetBar.hidden = !sheet;
+  chrome.storage.local.set({ panelKind });
+  if (sheet) refreshSheetBuckets(activeSheet);
+}
+
+const statusTone = (s) => (s === "Done" ? "green" : s === "In Process" ? "amber" : "gray");
+
+async function refreshSheetBuckets(selectId) {
+  const sheets = (await getBuckets()).filter((b) => b.kind === "sheet");
+  const stored = await new Promise((r) => chrome.storage.local.get("panelSheetBucket", (o) => r(o.panelSheetBucket)));
+  const chosen =
+    [selectId, activeSheet, stored].find((id) => sheets.some((b) => b.id === id)) || sheets[0]?.id;
+  els.sheetBucket.innerHTML = "";
+  for (const b of sheets) {
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.textContent = b.name;
+    els.sheetBucket.appendChild(opt);
+  }
+  els.sheetInput.disabled = !sheets.length;
+  els.sheetAdd.disabled = !sheets.length;
+  if (chosen) {
+    els.sheetBucket.value = chosen;
+    await switchSheet(chosen);
+  } else {
+    els.sheetRows.innerHTML = "";
+    els.sheetEmpty.hidden = false;
+  }
+}
+
+async function switchSheet(bucketId) {
+  if (!bucketId) return;
+  activeSheet = bucketId;
+  chrome.storage.local.set({ panelSheetBucket: bucketId });
+  await renderSheetRows();
+}
+
+async function renderSheetRows() {
+  if (!activeSheet) return;
+  const rows = (await getEntriesByBucket(activeSheet)).slice(0, 30); // newest-first
+  els.sheetRows.innerHTML = "";
+  els.sheetEmpty.hidden = rows.length > 0;
+  for (const e of rows) {
+    const row = document.createElement("div");
+    row.className = "sheet-row";
+
+    const txt = document.createElement("span");
+    txt.className = "txt";
+    if (/^https?:\/\/\S+$/.test(e.content || "")) {
+      const a = document.createElement("a");
+      a.href = e.content;
+      a.textContent = e.content;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      txt.appendChild(a);
+    } else {
+      txt.textContent = e.content || "(empty)";
+    }
+    if (e.sourceTitle || e.sourceUrl) {
+      const src = document.createElement("span");
+      src.className = "src";
+      src.textContent = e.sourceTitle || e.sourceUrl;
+      txt.appendChild(src);
+    }
+
+    const pill = document.createElement("select");
+    pill.className = "status-pill";
+    for (const s of STATUSES) {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      pill.appendChild(opt);
+    }
+    pill.value = e.status || STATUSES[0];
+    pill.dataset.tone = statusTone(pill.value);
+    pill.addEventListener("change", async () => {
+      pill.dataset.tone = statusTone(pill.value);
+      await updateEntry(e.id, { status: pill.value });
+      await enqueueUpsert(e.id);
+      await signalDump(); // live-refresh an open workspace tab
+      track("feature", { name: "panel-status" });
+    });
+
+    row.append(txt, pill);
+    els.sheetRows.appendChild(row);
+  }
+}
+
+async function onSheetAdd() {
+  const text = els.sheetInput.value.trim();
+  if (!text || !activeSheet) {
+    els.sheetInput.focus();
+    return;
+  }
+  const tab = await getActiveTab();
+  const entry = makeEntry({
+    bucketId: activeSheet,
+    content: text,
+    sourceUrl: tab?.url || "",
+    sourceTitle: tab?.title || "",
+  });
+  await addEntry(entry);
+  await setLastBucketId(activeSheet);
+  await enqueueUpsert(entry.id);
+  await signalDump();
+  els.sheetInput.value = "";
+  els.sheetInput.focus();
+  await renderSheetRows();
+  track("feature", { name: "panel-sheet-add" });
 }
 
 // New entries landed (selection pill, dock, hotkey, context menu, or our own
@@ -452,6 +668,229 @@ async function onRegionCapture(kind) {
       true
     );
   }
+}
+
+// ---- Export: PDF / Markdown (doc) and Excel (tracker) ----
+// Screenshots live permanently in IndexedDB, so exports embed them straight
+// from local storage — no cloud round-trip, works offline and unsynced.
+
+function download(filename, mime, data) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+const safeName = (s) => (s || "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "dumpster";
+
+async function bucketName(id) {
+  return (await getBuckets()).find((b) => b.id === id)?.name || "Dumpster";
+}
+
+async function onExportPdf() {
+  els.exportMenu.hidden = true;
+  if (!activeBucket) return;
+  // A dedicated print-styled page; Chrome's print dialog offers "Save as PDF".
+  chrome.tabs.create({
+    url: chrome.runtime.getURL(`export.html?bucket=${encodeURIComponent(activeBucket)}`),
+  });
+  track("feature", { name: "export-pdf" });
+}
+
+const blobToDataUri = (blob) =>
+  new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(blob);
+  });
+
+async function onExportMd() {
+  els.exportMenu.hidden = true;
+  if (!activeBucket) return;
+  let md = await getBody(activeBucket);
+  // Inline each local screenshot as a data URI so the .md is self-contained.
+  const ids = [...md.matchAll(/dumpster:img:([\w-]+)/g)].map((m) => m[1]);
+  for (const id of new Set(ids)) {
+    const blob = await getImage(id);
+    const uri = blob instanceof Blob ? await blobToDataUri(blob) : "";
+    md = md.split(`dumpster:img:${id}`).join(uri);
+  }
+  download(`${safeName(await bucketName(activeBucket))}.md`, "text/markdown", md);
+  track("feature", { name: "export-md" });
+  showToast("Markdown exported ✓");
+}
+
+// DOCX comes from the synced Google Doc via Drive's export (real .docx, images
+// included) — the one export that needs Google connected; PDF/MD stay local.
+async function onExportDocx() {
+  els.exportMenu.hidden = true;
+  if (!activeBucket) return;
+  const { connected } = await getConnection();
+  if (!connected) return showToast("Connect Google to export DOCX (PDF/MD work offline)", true);
+  const map = await new Promise((r) => chrome.storage.local.get("docsDocMap", (o) => r(o.docsDocMap || {})));
+  const docId = map[activeBucket]?.docId;
+  if (!docId) return showToast("This doc hasn't synced to Google yet — try again after sync", true);
+  try {
+    const token = await getToken(false);
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${docId}/export?mimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error(`export ${res.status}`);
+    const blob = await res.blob();
+    download(`${safeName(await bucketName(activeBucket))}.docx`, blob.type, blob);
+    track("feature", { name: "export-docx" });
+    showToast("Word doc exported ✓");
+  } catch (err) {
+    showToast(`DOCX export failed: ${err.message}`, true);
+  }
+}
+
+// ---- Sheet bar: Share / Open / Export (mirrors the doc bar) ----
+
+// All sheet buckets live as tabs in the one synced spreadsheet; deep-link to
+// this bucket's exact tab (#gid), like the workspace's "Open sheet ↗".
+function syncedSheetUrl() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get(["sheetsSpreadsheetId", "sheetsTabMap"], (o) => {
+      const sid = o.sheetsSpreadsheetId;
+      const tab = o.sheetsTabMap?.[activeSheet];
+      if (!sid || !tab) return resolve(null);
+      resolve(`https://docs.google.com/spreadsheets/d/${sid}/edit#gid=${tab.sheetId}`);
+    })
+  );
+}
+
+async function onShareSheet() {
+  const url = await syncedSheetUrl();
+  if (!url) return showToast("No cloud sheet yet — connect Google to share", true);
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Sheet link copied ✓");
+  } catch {
+    showToast(url);
+  }
+}
+
+async function onOpenSheet() {
+  const url = await syncedSheetUrl();
+  if (url) chrome.tabs.create({ url });
+  else chrome.runtime.openOptionsPage(); // not synced — open the local table
+}
+
+// ---- Tracker export with a bucket picker (mirrors the workspace modal) ----
+// Choosing a format opens a picker: the current tracker is listed first and
+// pre-checked; select more, or "All trackers". Multi-select exports one file —
+// Excel gets a worksheet per bucket, JSON one key per bucket.
+
+const EXPORT_COLS = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+let pickFormat = "xlsx"; // format chosen from the menu; used by the Export button
+
+function onExportXlsx() {
+  els.sheetExportMenu.hidden = true;
+  openExportPicker("xlsx");
+}
+function onExportJson() {
+  els.sheetExportMenu.hidden = true;
+  openExportPicker("json");
+}
+
+async function openExportPicker(format) {
+  if (!activeSheet) return;
+  pickFormat = format;
+  const sheets = (await getBuckets()).filter((b) => b.kind === "sheet");
+  // Current tracker first, like the workspace's export dialog.
+  sheets.sort((a, z) => (a.id === activeSheet ? -1 : z.id === activeSheet ? 1 : 0));
+  els.pickList.innerHTML = "";
+  for (const b of sheets) {
+    const item = document.createElement("label");
+    item.className = "pick-item";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = b.id;
+    cb.checked = b.id === activeSheet; // default: just the current tracker
+    cb.addEventListener("change", syncPickAll);
+    const name = document.createElement("span");
+    name.textContent = b.name;
+    item.append(cb, name);
+    if (b.id === activeSheet) {
+      const tag = document.createElement("span");
+      tag.className = "current";
+      tag.textContent = "current";
+      item.appendChild(tag);
+    }
+    els.pickList.appendChild(item);
+  }
+  els.pickAll.checked = sheets.length === 1;
+  syncPickAll();
+  els.pickBackdrop.hidden = false;
+}
+
+const pickBoxes = () => [...els.pickList.querySelectorAll("input[type=checkbox]")];
+
+function syncPickAll() {
+  const boxes = pickBoxes();
+  els.pickAll.checked = boxes.length > 0 && boxes.every((b) => b.checked);
+  els.pickGo.disabled = !boxes.some((b) => b.checked);
+}
+
+function closeExportPicker() {
+  els.pickBackdrop.hidden = true;
+}
+
+// Gather rows for one bucket, oldest-first, in the workspace's export shape.
+async function exportRows(bucketId) {
+  return (await getEntriesByBucket(bucketId))
+    .slice()
+    .sort((a, z) => (a.createdAt < z.createdAt ? -1 : 1))
+    .map((e) => Object.fromEntries(EXPORT_COLS.map((c) => [c, e[c] ?? ""])));
+}
+
+// Excel tab names: ≤31 chars, no illegal chars, deduped — as in the workspace.
+function uniqueSheetName(name, used) {
+  let base = (name || "Sheet").replace(/[\[\]*?/\\:]/g, "-").slice(0, 31) || "Sheet";
+  let candidate = base;
+  let n = 2;
+  while (used.has(candidate)) candidate = `${base.slice(0, 28)} ${n++}`;
+  used.add(candidate);
+  return candidate;
+}
+
+async function onExportGo() {
+  const ids = pickBoxes().filter((b) => b.checked).map((b) => b.value);
+  if (!ids.length) return;
+  const buckets = (await getBuckets()).filter((b) => ids.includes(b.id));
+  const data = [];
+  for (const b of buckets) data.push({ name: b.name, rows: await exportRows(b.id) });
+  const stem = data.length === 1 ? safeName(data[0].name) : "dumpster-trackers";
+
+  if (pickFormat === "json") {
+    const obj = {};
+    for (const d of data) obj[d.name] = d.rows;
+    download(`${stem}.json`, "application/json", JSON.stringify(obj, null, 2));
+    track("feature", { name: "export-json" });
+  } else {
+    const XLSX = globalThis.__xlsxOverride || (await import("./vendor/xlsx.mjs"));
+    const wb = XLSX.utils.book_new();
+    const used = new Set();
+    for (const d of data) {
+      const ws = d.rows.length
+        ? XLSX.utils.json_to_sheet(d.rows, { header: EXPORT_COLS })
+        : XLSX.utils.aoa_to_sheet([EXPORT_COLS]);
+      XLSX.utils.book_append_sheet(wb, ws, uniqueSheetName(d.name, used));
+    }
+    const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    download(`${stem}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf);
+    track("feature", { name: "export-xlsx" });
+  }
+  closeExportPicker();
+  showToast(`Exported ${data.length === 1 ? data[0].name : data.length + " trackers"} ✓`);
 }
 
 // ---- Share / Open Doc (bottom bar) ----

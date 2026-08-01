@@ -246,6 +246,254 @@
         color: var(--faint);
         white-space: nowrap;
       }
+      .export-wrap {
+        position: relative;
+        flex: 1;
+        display: flex;
+      }
+      .export-wrap .secondary-btn {
+        flex: 1;
+      }
+      .export-menu {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        min-width: 130px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        z-index: 15;
+      }
+      .export-menu[hidden] {
+        display: none !important;
+      }
+      .export-menu button {
+        border: none;
+        background: none;
+        color: var(--text);
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        text-align: left;
+        padding: 8px 11px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      .export-menu button:hover {
+        background: var(--surface2);
+      }
+
+      /* ---- Sheet mode: mini tracker ---- */
+      .kind-switch {
+        margin-left: 0;
+        flex: none;
+      }
+      .sheet-main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+        gap: 10px;
+      }
+      .sheet-main[hidden] {
+        display: none !important;
+      }
+      .doc-main[hidden],
+      .fmt-row[hidden],
+      .capture-bar[hidden] {
+        display: none !important;
+      }
+      .sheet-add {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+      }
+      .sheet-add textarea {
+        flex: 1;
+        min-width: 0;
+        resize: none;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 12.5px;
+      }
+      .sheet-add textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: var(--ring);
+      }
+      .sheet-add .primary-btn {
+        flex: none;
+        padding: 8px 14px;
+      }
+      .sheet-rows {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        scrollbar-width: thin;
+      }
+      .sheet-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 10px;
+        padding: 8px 10px;
+      }
+      .sheet-row .txt {
+        flex: 1;
+        min-width: 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        word-break: break-word;
+      }
+      .sheet-row .txt a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .sheet-row .src {
+        display: block;
+        font-size: 10.5px;
+        color: var(--faint);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .status-pill {
+        flex: none;
+        appearance: none;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        padding: 3px 8px;
+        cursor: pointer;
+        color: var(--tone, var(--muted));
+        background: color-mix(in srgb, var(--tone, var(--muted)) 14%, transparent);
+      }
+      .status-pill[data-tone="green"] {
+        --tone: #059669;
+      }
+      .status-pill[data-tone="amber"] {
+        --tone: #b45309;
+      }
+      .status-pill[data-tone="gray"] {
+        --tone: var(--muted);
+      }
+      @media (prefers-color-scheme: dark) {
+        .status-pill[data-tone="green"] {
+          --tone: #34d399;
+        }
+        .status-pill[data-tone="amber"] {
+          --tone: #fbbf24;
+        }
+      }
+      .sheet-empty {
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        margin-top: 22px;
+        line-height: 1.5;
+      }
+
+      /* ---- Export picker (choose trackers, like the workspace modal) ---- */
+      .pick-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 25;
+        background: rgba(10, 14, 20, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+      }
+      .pick-backdrop[hidden] {
+        display: none !important;
+      }
+      .pick-modal {
+        width: 100%;
+        max-width: 300px;
+        max-height: 70vh;
+        overflow-y: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .pick-modal h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .pick-all,
+      .pick-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        cursor: pointer;
+        padding: 5px 6px;
+        border-radius: 7px;
+      }
+      .pick-all:hover,
+      .pick-item:hover {
+        background: var(--surface2);
+      }
+      .pick-all {
+        border-bottom: 1px solid var(--border);
+        border-radius: 0;
+        padding-bottom: 9px;
+        font-weight: 600;
+      }
+      .pick-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .pick-item input,
+      .pick-all input {
+        accent-color: var(--accent);
+      }
+      .pick-item .current {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        border-radius: 99px;
+        padding: 1px 7px;
+      }
+      .pick-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .pick-actions .secondary-btn,
+      .pick-actions .primary-btn {
+        flex: 1;
+        padding: 8px 10px;
+        font-size: 12.5px;
+      }
 
       /* ---- Drag-and-drop image target ---- */
       .drop-overlay {
@@ -292,12 +540,16 @@
   <body>
     <div class="doc-toolbar">
       <div class="doc-row">
-        <span class="logo" aria-hidden="true" style="flex: none"></span>
+        <div class="mode-tabs kind-switch" role="tablist" aria-label="Bucket type">
+          <button id="kind-doc" class="mode-tab" role="tab">Doc</button>
+          <button id="kind-sheet" class="mode-tab" role="tab">Sheet</button>
+        </div>
         <select id="bucket" class="bucket-select" title="Active doc"></select>
-        <button id="new-bucket" class="ghost-btn" title="New Doc bucket">＋</button>
+        <select id="sheet-bucket" class="bucket-select" title="Active tracker" hidden></select>
+        <button id="new-bucket" class="ghost-btn" title="New bucket">＋</button>
         <button id="open-viewer" class="ghost-btn" title="Open full dumpster">↗</button>
       </div>
-      <div class="fmt-row">
+      <div class="fmt-row" id="fmt-row">
         <select id="fmt-block" class="fmt-select" title="Paragraph style">
           <option value="p">Normal</option>
           <option value="h1">Heading 1</option>
@@ -319,7 +571,7 @@
       </div>
     </div>
 
-    <main class="doc-main">
+    <main class="doc-main" id="doc-main">
       <textarea
         id="editor"
         class="editor"
@@ -330,10 +582,57 @@
       <div id="preview" class="preview"></div>
     </main>
 
-    <div class="capture-bar">
+    <section class="sheet-main" id="sheet-main" hidden>
+      <div class="sheet-add">
+        <textarea id="sheet-input" rows="2" placeholder="Add to this tracker… (⌘/Ctrl+Enter)"></textarea>
+        <button id="sheet-add" class="primary-btn">Add</button>
+      </div>
+      <div id="sheet-rows" class="sheet-rows"></div>
+      <div id="sheet-empty" class="sheet-empty" hidden>
+        Nothing tracked yet — add an item above, or right-click on any page →
+        <b>Dump to</b>.
+      </div>
+    </section>
+
+    <div class="capture-bar" id="doc-bar">
       <button id="share-doc" class="secondary-btn" title="Copy the doc's Google Docs link">⇪ Share</button>
       <button id="open-doc" class="secondary-btn" title="Open this doc">↗ Open Doc</button>
+      <div class="export-wrap">
+        <button id="export-doc" class="secondary-btn" title="Export this doc">⇓ Export</button>
+        <div id="export-menu" class="export-menu" hidden>
+          <button id="export-pdf">PDF</button>
+          <button id="export-docx">Word (.docx)</button>
+          <button id="export-md">Markdown</button>
+        </div>
+      </div>
       <span id="save-state" class="save-state">Saved</span>
+    </div>
+
+    <div class="capture-bar" id="sheet-bar" hidden>
+      <button id="share-sheet" class="secondary-btn" title="Copy the tracker's Google Sheet link">⇪ Share</button>
+      <button id="open-sheet" class="secondary-btn" title="Open this tracker's sheet">↗ Open Sheet</button>
+      <div class="export-wrap">
+        <button id="export-sheet" class="secondary-btn" title="Export this tracker">⇓ Export</button>
+        <div id="sheet-export-menu" class="export-menu" hidden>
+          <button id="export-xlsx">Excel (.xlsx)</button>
+          <button id="export-json">JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pick-backdrop" class="pick-backdrop" hidden>
+      <div class="pick-modal" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+        <h3 id="pick-title">Export trackers</h3>
+        <label class="pick-all">
+          <input type="checkbox" id="pick-all" />
+          <span>All trackers</span>
+        </label>
+        <div id="pick-list" class="pick-list"></div>
+        <div class="pick-actions">
+          <button id="pick-cancel" class="secondary-btn">Cancel</button>
+          <button id="pick-go" class="primary-btn">Export</button>
+        </div>
+      </div>
     </div>
 
     <div id="drop-overlay" class="drop-overlay" hidden>
