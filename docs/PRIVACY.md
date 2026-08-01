@@ -99,7 +99,7 @@ transferred to third parties, and is not used for advertising.
 | Identity | Only if you connect Google: sign-in for cloud sync. |
 | Alarms | Retry cloud-sync writes in the background if you're offline. |
 | Scripting (active tab only) | Show the "name your new bucket" prompt and the drag-a-region screenshot overlay on the current page. Nothing is read from the page. |
-| Optional per-site access | Only if you use the doc panel's region/OCR capture buttons on a site and approve Chrome's one-time prompt for it: lets the panel draw the selection overlay and capture that site's visible tab. Granted per site, by you; revocable anytime in `chrome://extensions` → Dumpster → Site access. |
+| Optional site access (on request) | Nothing at install. The first time you use the doc panel's region/OCR capture buttons, Chrome shows its own one-time prompt asking to allow access on websites — required because Chrome's screen-capture API only accepts that broad grant. Dumpster uses it solely to draw the selection overlay and capture the visible tab when *you* click a capture button; it still never reads pages in the background. Revocable anytime at `chrome://extensions` → Dumpster → Site access. |
 | Side panel | The optional study panel you can pin beside a page. |
 | googleapis.com access | Only if you connect Google: write to your own Sheet. |
 | supabase.co access | Send the anonymous usage statistics described above (opt-out). |

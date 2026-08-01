@@ -38,8 +38,9 @@ you meant to come back to.
     writing into), paragraph styles (Normal/H1/H2), **B / I / code / lists**,
     **⬚ region screenshot** and **OCR** capture buttons (both drop a drag-
     rectangle on the page; the crop lands at the end of the doc as an image or
-    as extracted paragraph text), and GitHub-style **Write / Preview** tabs
-    with a live rendered preview.
+    as extracted paragraph text — the first use asks Chrome's one-time
+    site-access prompt, required by the capture API), and GitHub-style
+    **Write / Preview** tabs with a live rendered preview.
     Selections and screenshots you capture on the page flow straight into the
     active doc (and still sync as entries); around them you can write anything
     in markdown — saved locally as you type. You can also **drag an image into

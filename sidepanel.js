@@ -379,19 +379,24 @@ async function saveEntry({ content, blob, format }) {
 
 // ---- Toolbar captures: region screenshot / OCR grab ----
 // A click inside the panel is NOT one of the gestures that grants activeTab
-// for the page (icon click / menu / hotkey are), so the panel asks for
-// per-site access the first time you capture on a site — Chrome shows an
-// "Allow?" prompt once, then it works there permanently. The crop lands at
-// the end of the doc, exactly like a text selection from the pill.
+// for the page (icon click / menu / hotkey are), and captureVisibleTab
+// rejects per-origin grants outright — it demands "<all_urls>" or a live
+// activeTab. So the first capture asks Chrome's one-time "allow on all
+// websites" prompt; after approval, panel capture works everywhere. The crop
+// lands at the end of the doc, exactly like a text selection from the pill.
 
-async function ensureSiteAccess(tab) {
+const ALL_URLS = { origins: ["<all_urls>"] };
+// Chrome hard-blocks scripting these even with <all_urls> granted.
+const UNSCRIPTABLE = /^https:\/\/(chromewebstore\.google\.com|chrome\.google\.com\/webstore)/i;
+
+async function ensureCaptureAccess(tab) {
   const url = tab?.url || "";
-  if (!/^https?:\/\//i.test(url)) return "unsupported"; // chrome://, store, etc.
-  const pattern = `${new URL(url).origin}/*`;
+  if (!/^https?:\/\//i.test(url) || UNSCRIPTABLE.test(url)) return "unsupported";
   try {
-    if (await chrome.permissions.contains({ origins: [pattern] })) return "ok";
-    // Ask immediately, while the button click's activation is still fresh.
-    return (await chrome.permissions.request({ origins: [pattern] })) ? "ok" : "declined";
+    if (await chrome.permissions.contains(ALL_URLS)) return "ok";
+    // Ask immediately, while the button click's activation is still fresh —
+    // a single prompt, ever; the grant persists.
+    return (await chrome.permissions.request(ALL_URLS)) ? "ok" : "declined";
   } catch {
     return "declined"; // request needs a gesture — fall through to activeTab
   }
@@ -399,7 +404,7 @@ async function ensureSiteAccess(tab) {
 
 async function onRegionCapture(kind) {
   const tab = await getActiveTab();
-  const access = await ensureSiteAccess(tab);
+  const access = await ensureCaptureAccess(tab);
   if (access === "unsupported") return showToast("This page can't be captured", true);
   let stage = "select"; // which step failed, for a precise error message
   try {
@@ -437,7 +442,7 @@ async function onRegionCapture(kind) {
     const detail = String(err?.message || err).slice(0, 110);
     showToast(
       access === "declined"
-        ? "Capture needs access to this site — approve the prompt, or press Alt+Shift+S"
+        ? "Capture needs site access — approve the one-time prompt, or press Alt+Shift+S"
         : `Capture failed (${stage}): ${detail}`,
       true
     );
