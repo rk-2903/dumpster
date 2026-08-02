@@ -60,6 +60,12 @@ const els = {
   aiOllamaUrl: document.getElementById("ai-ollama-url"),
   aiOllamaModel: document.getElementById("ai-ollama-model"),
   aiOllamaModels: document.getElementById("ai-ollama-models"),
+  aiOpenaiFields: document.getElementById("ai-openai-fields"),
+  aiOpenaiKey: document.getElementById("ai-openai-key"),
+  aiOpenaiModel: document.getElementById("ai-openai-model"),
+  aiAnthropicFields: document.getElementById("ai-anthropic-fields"),
+  aiAnthropicKey: document.getElementById("ai-anthropic-key"),
+  aiAnthropicModel: document.getElementById("ai-anthropic-model"),
   aiStatus: document.getElementById("ai-status"),
   aiTest: document.getElementById("ai-test"),
   aiSave: document.getElementById("ai-save"),
@@ -1150,10 +1156,16 @@ function renderAiSettings() {
   }
   els.aiGeminiFields.hidden = s.provider !== "gemini";
   els.aiOllamaFields.hidden = s.provider !== "ollama";
+  els.aiOpenaiFields.hidden = s.provider !== "openai";
+  els.aiAnthropicFields.hidden = s.provider !== "anthropic";
   els.aiGeminiKey.value = s.geminiKey;
   els.aiGeminiModel.value = s.geminiModel;
   els.aiOllamaUrl.value = s.ollamaUrl;
   els.aiOllamaModel.value = s.ollamaModel;
+  els.aiOpenaiKey.value = s.openaiKey;
+  els.aiOpenaiModel.value = s.openaiModel;
+  els.aiAnthropicKey.value = s.anthropicKey;
+  els.aiAnthropicModel.value = s.anthropicModel;
   aiStatus("");
 }
 
@@ -1162,6 +1174,10 @@ function readAiDraft() {
   aiDraft.geminiModel = els.aiGeminiModel.value.trim() || "gemini-2.5-flash";
   aiDraft.ollamaUrl = els.aiOllamaUrl.value.trim() || "http://localhost:11434";
   aiDraft.ollamaModel = els.aiOllamaModel.value.trim();
+  aiDraft.openaiKey = els.aiOpenaiKey.value.trim();
+  aiDraft.openaiModel = els.aiOpenaiModel.value.trim() || "gpt-4o-mini";
+  aiDraft.anthropicKey = els.aiAnthropicKey.value.trim();
+  aiDraft.anthropicModel = els.aiAnthropicModel.value.trim() || "claude-sonnet-5";
 }
 
 function aiStatus(msg, ok = false) {
@@ -1191,7 +1207,12 @@ async function onAiTest() {
 
 async function onAiSave() {
   readAiDraft();
-  let origin = "https://generativelanguage.googleapis.com/*";
+  const ORIGINS = {
+    gemini: "https://generativelanguage.googleapis.com/*",
+    openai: "https://api.openai.com/*",
+    anthropic: "https://api.anthropic.com/*",
+  };
+  let origin = ORIGINS[aiDraft.provider] || "https://generativelanguage.googleapis.com/*";
   if (aiDraft.provider === "ollama") {
     // Refuse non-local hosts: sending notes to someone else's "Ollama" would
     // quietly break the promise this feature makes.
@@ -1202,11 +1223,13 @@ async function onAiSave() {
     origin = check.originPattern;
   }
   if (!aiReady(aiDraft)) {
-    aiStatus(
-      aiDraft.provider === "gemini"
-        ? "Paste your Gemini API key first"
-        : "Set the Ollama URL and a model (Test lists what's installed)"
-    );
+    const NEEDS = {
+      gemini: "Paste your Gemini API key first",
+      ollama: "Set the Ollama URL and a model (Test lists what's installed)",
+      openai: "Paste your OpenAI API key first",
+      anthropic: "Paste your Anthropic API key first",
+    };
+    aiStatus(NEEDS[aiDraft.provider] || "Pick a provider first");
     return;
   }
   await setAi(aiDraft);
@@ -1223,7 +1246,13 @@ async function onAiSave() {
     console.warn("[dumpster] AI host permission not granted:", err);
   }
   els.aiBackdrop.hidden = true;
-  showToast(`AI ready — ${aiDraft.provider === "gemini" ? aiDraft.geminiModel : aiDraft.ollamaModel}`);
+  const MODEL_OF = {
+    gemini: aiDraft.geminiModel,
+    ollama: aiDraft.ollamaModel,
+    openai: aiDraft.openaiModel,
+    anthropic: aiDraft.anthropicModel,
+  };
+  showToast(`AI ready — ${MODEL_OF[aiDraft.provider]}`);
   track("feature", { name: "ai-setup" });
 }
 

@@ -64,13 +64,17 @@ you meant to come back to.
       (Q/A pairs land as a key/value Sheet bucket, synced like any tracker),
       **Quiz me** (interactive multiple-choice overlay with explanations and a
       score), and **Ask your notes** (chat over all your buckets with cited
-      sources; insert answers into the doc). Connect it **your way**: your own
-      **free Gemini API key** ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-      — most students have one) or a **local Ollama model**
-      ([ollama.com](https://ollama.com), start it with
-      `OLLAMA_ORIGINS=chrome-extension://*`) for fully-offline privacy. Keys
-      stay on your device; requests go straight to your chosen provider, never
-      through any middleman — see [docs/PRIVACY.md](docs/PRIVACY.md).
+      sources; insert answers into the doc). Connect it **your way** — four
+      options: **Gemini** (a **free** key from
+      [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — most
+      students have one), **Ollama** (a model on your **own machine** via
+      [ollama.com](https://ollama.com), allowed with
+      `OLLAMA_ORIGINS=chrome-extension://*`; on the macOS menu-bar app run
+      `launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"` and **restart
+      Ollama**), **OpenAI**, or **Anthropic** (both pay-as-you-go keys). Keys
+      stay on your device; requests go straight to the provider you picked,
+      never through any middleman, and Ollama hosts must be local — see
+      [docs/PRIVACY.md](docs/PRIVACY.md).
     - **Voice input** — a 🎙 mic button in the doc bottom bar dictates notes in
       **your language** (~100 supported; picker beside the mic, remembered).
       Uses the browser's **free built-in speech recognition** — no account, no
