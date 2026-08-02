@@ -53,7 +53,21 @@ you meant to come back to.
       entries (⌘/Ctrl+Enter, current page attached as source), and flip the
       newest rows' **status pills** (To Do / In Process / Done) inline —
       changes sync and live-refresh an open workspace. The mode and last
-      tracker are remembered.
+      tracker are remembered. Each add has two fields: an optional **Key**
+      (a label like `username` or `id`) above the **Data** — they land in
+      **separate columns** in the workspace table, the synced Google Sheet,
+      and exports, so key/value trackers stay structured. (Note: trackers are
+      **not encrypted** — locally or in your Google Sheet — so avoid storing
+      real passwords or secrets.)
+    - **Voice input** — a 🎙 mic button in the doc bottom bar dictates notes in
+      **your language** (~100 supported; picker beside the mic, remembered).
+      Uses the browser's **free built-in speech recognition** — no account, no
+      API key. Spoken text lands **at your cursor** in the editor (plain
+      Cmd/Ctrl+Z undoes it), or at the **end of the doc** when the editor isn't
+      focused; interim words preview live above the bar. First use opens a
+      one-time microphone grant tab (side panels can't show the prompt);
+      needs internet (Chrome's recognizer runs on Google's speech service —
+      see the privacy policy).
     - **Bottom bar** (per mode) — **⇪ Share** and **↗ Open** deep-link to the
       bucket's Google Doc or its exact spreadsheet tab, and **⇓ Export**:
       a Doc exports as **PDF** (print-styled page → Save as PDF),
@@ -215,6 +229,12 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 
 ## Roadmap (Phase 2)
 
+- **UI localization** — translate the extension's own labels/buttons via
+  `chrome.i18n` + `_locales` (voice dictation already works in ~100 languages).
+- **Offline / on-device dictation** — Chrome's on-device speech recognition (or
+  a Whisper-class model) so voice input works without internet.
+- **Translate dictation** — optionally translate spoken notes into the doc's
+  language instead of transcribing verbatim.
 - **Convert bucket type** — switch an existing bucket between Sheet and Doc
   (with its synced data migrated to the new destination).
 - **Paywall / subscriptions** — gate premium features (e.g. Excel import/export,

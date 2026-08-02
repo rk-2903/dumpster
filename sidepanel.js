@@ -14,11 +14,12 @@
 // Open Doc for the active bucket's synced Google Doc.
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
-import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, STATUSES } from "./src/db.js";
-import { enqueueUpsert } from "./src/outbox.js";
+import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, deleteEntry, STATUSES, EXPORT_COLS } from "./src/db.js";
+import { enqueueUpsert, enqueueDelete } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
 import { ytGrabTranscript } from "./src/ytTranscript.js";
+import { createVoiceInput, voiceSupported } from "./src/voiceInput.js";
 import { getToken, getConnection } from "./src/googleAuth.js";
 import { createDocsProvider } from "./src/docsSync.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
@@ -43,6 +44,10 @@ const els = {
   capOcr: document.getElementById("cap-ocr"),
   capTs: document.getElementById("cap-ts"),
   capTsMenu: document.getElementById("cap-ts-menu"),
+  voiceBtn: document.getElementById("voice-btn"),
+  voiceLang: document.getElementById("voice-lang"),
+  voiceMenu: document.getElementById("voice-menu"),
+  voiceLive: document.getElementById("voice-live"),
   shareDoc: document.getElementById("share-doc"),
   openDoc: document.getElementById("open-doc"),
   saveState: document.getElementById("save-state"),
@@ -57,6 +62,7 @@ const els = {
   sheetBucket: document.getElementById("sheet-bucket"),
   sheetMain: document.getElementById("sheet-main"),
   sheetInput: document.getElementById("sheet-input"),
+  sheetKey: document.getElementById("sheet-key"),
   sheetAdd: document.getElementById("sheet-add"),
   sheetRows: document.getElementById("sheet-rows"),
   sheetEmpty: document.getElementById("sheet-empty"),
@@ -108,6 +114,16 @@ async function init() {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       onSheetAdd();
+    }
+  });
+  els.sheetKey.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      onSheetAdd();
+    } else if (e.key === "Enter") {
+      // plain Enter in the key field just moves on to the data field
+      e.preventDefault();
+      els.sheetInput.focus();
     }
   });
   chrome.storage.local.get("panelKind", (o) => setKind(o.panelKind === "sheet" ? "sheet" : "doc"));
@@ -171,7 +187,9 @@ async function init() {
     els.exportMenu.hidden = true;
     els.sheetExportMenu.hidden = true;
     els.capTsMenu.hidden = true;
+    els.voiceMenu.hidden = true;
   });
+  setupVoice();
   els.exportPdf.addEventListener("click", onExportPdf);
   els.exportDocx.addEventListener("click", onExportDocx);
   els.exportMd.addEventListener("click", onExportMd);
@@ -409,6 +427,7 @@ async function refreshSheetBuckets(selectId) {
     els.sheetBucket.appendChild(opt);
   }
   els.sheetInput.disabled = !sheets.length;
+  els.sheetKey.disabled = !sheets.length;
   els.sheetAdd.disabled = !sheets.length;
   if (chosen) {
     els.sheetBucket.value = chosen;
@@ -437,6 +456,13 @@ async function renderSheetRows() {
 
     const txt = document.createElement("span");
     txt.className = "txt";
+    if (e.key) {
+      const chip = document.createElement("span");
+      chip.className = "key";
+      chip.textContent = e.key;
+      chip.title = e.key;
+      txt.appendChild(chip);
+    }
     if (/^https?:\/\/\S+$/.test(e.content || "")) {
       const a = document.createElement("a");
       a.href = e.content;
@@ -445,7 +471,7 @@ async function renderSheetRows() {
       a.rel = "noreferrer";
       txt.appendChild(a);
     } else {
-      txt.textContent = e.content || "(empty)";
+      txt.appendChild(document.createTextNode(e.content || "(empty)"));
     }
     if (e.sourceTitle || e.sourceUrl) {
       const src = document.createElement("span");
@@ -472,14 +498,45 @@ async function renderSheetRows() {
       track("feature", { name: "panel-status" });
     });
 
-    row.append(txt, pill);
+    // Two-step delete: first click arms a red "Delete?" for 3s (a native
+    // confirm() dialog is unreliable inside the side panel), second click
+    // actually deletes. Anything else lets it quietly revert to ✕.
+    const del = document.createElement("button");
+    del.className = "row-del";
+    del.textContent = "✕";
+    del.title = "Delete this entry";
+    let confirmTimer = null;
+    del.addEventListener("click", async () => {
+      if (!del.classList.contains("confirm")) {
+        del.classList.add("confirm");
+        del.textContent = "Delete?";
+        del.title = "Click again to delete";
+        confirmTimer = setTimeout(() => {
+          del.classList.remove("confirm");
+          del.textContent = "✕";
+          del.title = "Delete this entry";
+        }, 3000);
+        return;
+      }
+      clearTimeout(confirmTimer);
+      await deleteEntry(e.id);
+      await enqueueDelete(e.id, e.bucketId); // remove the synced sheet row too
+      await signalDump(); // live-refresh an open workspace tab
+      row.remove();
+      els.sheetEmpty.hidden = els.sheetRows.children.length > 0;
+      track("feature", { name: "panel-sheet-delete" });
+    });
+
+    row.append(txt, pill, del);
     els.sheetRows.appendChild(row);
   }
 }
 
 async function onSheetAdd() {
   const text = els.sheetInput.value.trim();
+  const key = els.sheetKey.value.trim();
   if (!text || !activeSheet) {
+    // Key alone isn't an entry — Data is the required field.
     els.sheetInput.focus();
     return;
   }
@@ -490,12 +547,14 @@ async function onSheetAdd() {
     sourceUrl: tab?.url || "",
     sourceTitle: tab?.title || "",
   });
+  if (key) entry.key = key;
   await addEntry(entry);
   await setLastBucketId(activeSheet);
   await enqueueUpsert(entry.id);
   await signalDump();
   els.sheetInput.value = "";
-  els.sheetInput.focus();
+  els.sheetKey.value = "";
+  els.sheetKey.focus();
   await renderSheetRows();
   track("feature", { name: "panel-sheet-add" });
 }
@@ -775,6 +834,157 @@ async function onTranscriptCapture(windowSec) {
   }
 }
 
+// ---- Voice input (dictation) ----
+// Chrome's built-in Web Speech API — free, no keys, ~100 languages. The side
+// panel can't show the mic permission prompt itself, so the first use routes
+// through micgrant.html in a tab (one grant, persists for the extension).
+// Finals land at the editor's caret when it has focus (undo-friendly via
+// replaceRange); otherwise they're appended at the end of the doc.
+
+const VOICE_LANGS = [
+  { code: "en-US", label: "English (US)" },
+  { code: "en-IN", label: "English (India)" },
+  { code: "hi-IN", label: "हिन्दी — Hindi" },
+  { code: "bn-IN", label: "বাংলা — Bengali" },
+  { code: "ta-IN", label: "தமிழ் — Tamil" },
+  { code: "te-IN", label: "తెలుగు — Telugu" },
+  { code: "mr-IN", label: "मराठी — Marathi" },
+  { code: "gu-IN", label: "ગુજરાતી — Gujarati" },
+  { code: "kn-IN", label: "ಕನ್ನಡ — Kannada" },
+  { code: "ml-IN", label: "മലയാളം — Malayalam" },
+  { code: "pa-IN", label: "ਪੰਜਾਬੀ — Punjabi" },
+  { code: "ur-IN", label: "اردو — Urdu" },
+  { code: "ne-NP", label: "नेपाली — Nepali" },
+  { code: "es-ES", label: "Español — Spanish" },
+  { code: "fr-FR", label: "Français — French" },
+  { code: "de-DE", label: "Deutsch — German" },
+  { code: "it-IT", label: "Italiano — Italian" },
+  { code: "pt-BR", label: "Português (Brasil)" },
+  { code: "ru-RU", label: "Русский — Russian" },
+  { code: "ja-JP", label: "日本語 — Japanese" },
+  { code: "ko-KR", label: "한국어 — Korean" },
+  { code: "zh-CN", label: "中文（简体）— Chinese" },
+  { code: "ar-SA", label: "العربية — Arabic" },
+  { code: "id-ID", label: "Bahasa Indonesia" },
+  { code: "tr-TR", label: "Türkçe — Turkish" },
+  { code: "vi-VN", label: "Tiếng Việt — Vietnamese" },
+  { code: "th-TH", label: "ไทย — Thai" },
+];
+
+let voiceLang = "en-US";
+let dictAppended = false; // first append of a session opens a new paragraph
+
+const voice = createVoiceInput({
+  getLang: () => voiceLang,
+  onFinal: insertDictation,
+  onInterim: (t) => {
+    els.voiceLive.textContent = t;
+    els.voiceLive.hidden = !t;
+  },
+  onState: (on) => {
+    els.voiceBtn.classList.toggle("rec", on);
+    if (!on) dictAppended = false;
+  },
+  onError: (msg, code) => {
+    els.voiceBtn.classList.remove("rec");
+    if (code === "not-allowed" || code === "service-not-allowed") return openMicGrant();
+    showToast(msg, true);
+  },
+});
+
+function voiceLangDefault() {
+  const ui = (chrome.i18n?.getUILanguage?.() || "en").toLowerCase();
+  const hit =
+    VOICE_LANGS.find((l) => l.code.toLowerCase() === ui) ||
+    VOICE_LANGS.find((l) => l.code.slice(0, 2) === ui.slice(0, 2));
+  return hit?.code || "en-US";
+}
+
+function setupVoice() {
+  chrome.storage.local.get(["voiceLang"], (o) => {
+    voiceLang = o.voiceLang || voiceLangDefault();
+    renderVoiceMenu();
+  });
+  // Keep the editor's focus/caret — the whole point of the cursor-insert path.
+  for (const el of [els.voiceBtn, els.voiceLang, els.voiceMenu]) {
+    el.addEventListener("mousedown", (e) => e.preventDefault());
+  }
+  els.voiceBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onVoiceToggle();
+  });
+  els.voiceLang.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.exportMenu.hidden = true;
+    els.capTsMenu.hidden = true;
+    els.voiceMenu.hidden = !els.voiceMenu.hidden;
+  });
+  els.voiceMenu.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-lang]");
+    if (!b) return;
+    e.stopPropagation();
+    voiceLang = b.dataset.lang;
+    chrome.storage.local.set({ voiceLang });
+    els.voiceMenu.hidden = true;
+    renderVoiceMenu();
+  });
+}
+
+function renderVoiceMenu() {
+  const cur = VOICE_LANGS.find((l) => l.code === voiceLang);
+  els.voiceLang.textContent = voiceLang.slice(0, 2).toUpperCase() + " ▾";
+  els.voiceLang.title = `Dictation language — ${cur ? cur.label : voiceLang}`;
+  els.voiceMenu.innerHTML = "";
+  for (const l of VOICE_LANGS) {
+    const b = document.createElement("button");
+    b.dataset.lang = l.code;
+    b.textContent = l.label;
+    if (l.code === voiceLang) b.classList.add("sel");
+    els.voiceMenu.appendChild(b);
+  }
+}
+
+async function onVoiceToggle() {
+  if (!voiceSupported()) return showToast("Dictation isn't supported in this browser", true);
+  if (voice.active) return voice.stop();
+  let state = "prompt";
+  try {
+    state = (await navigator.permissions.query({ name: "microphone" })).state;
+  } catch {}
+  if (state !== "granted") return openMicGrant();
+  track("feature", { name: "panel-voice" });
+  voice.start();
+}
+
+function openMicGrant() {
+  voice.stop();
+  chrome.tabs.create({ url: chrome.runtime.getURL("micgrant.html") });
+  showToast("Allow the microphone once in the new tab, then click the mic again");
+}
+
+function insertDictation(text) {
+  const chunk = text.trim();
+  if (!chunk || !activeBucket) return;
+  const v = els.editor.value;
+  if (mode === "write" && document.activeElement === els.editor) {
+    const s = els.editor.selectionStart;
+    const e = els.editor.selectionEnd;
+    const glueBefore = s && !/\s$/.test(v.slice(0, s)) ? " " : "";
+    const glueAfter = v.slice(e) && !/^\s/.test(v.slice(e)) ? " " : "";
+    const ins = glueBefore + chunk + glueAfter;
+    replaceRange(s, e, ins, s + ins.length, s + ins.length);
+  } else {
+    // Editor not focused (or Preview mode) → append at the end of the doc,
+    // opening a fresh paragraph for the session's first phrase. replaceRange
+    // falls back to a value write + input event when the hidden editor can't
+    // take execCommand, so autosave and the live preview still kick in.
+    const glue = !v ? "" : dictAppended ? " " : /\n$/.test(v) ? "" : "\n\n";
+    const ins = glue + chunk;
+    replaceRange(v.length, v.length, ins, v.length + ins.length, v.length + ins.length);
+    dictAppended = true;
+  }
+}
+
 // ---- Export: PDF / Markdown (doc) and Excel (tracker) ----
 // Screenshots live permanently in IndexedDB, so exports embed them straight
 // from local storage — no cloud round-trip, works offline and unsynced.
@@ -894,7 +1104,7 @@ async function onOpenSheet() {
 // pre-checked; select more, or "All trackers". Multi-select exports one file —
 // Excel gets a worksheet per bucket, JSON one key per bucket.
 
-const EXPORT_COLS = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+// EXPORT_COLS is shared with the workspace exports — see src/db.js.
 let pickFormat = "xlsx"; // format chosen from the menu; used by the Export button
 
 function onExportXlsx() {

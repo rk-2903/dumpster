@@ -13,6 +13,8 @@ let dbPromise = null;
 // The three workflow states. New dumps default to the first (To Do).
 export const STATUSES = ["To Do", "In Process", "Done"];
 export const DEFAULT_STATUS = STATUSES[0];
+// Columns for user-facing exports (Excel/JSON) — shared by workspace + panel.
+export const EXPORT_COLS = ["createdAt", "key", "content", "sourceUrl", "sourceTitle", "status", "notes"];
 
 function openDB() {
   if (dbPromise) return dbPromise;
