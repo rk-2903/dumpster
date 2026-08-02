@@ -14,7 +14,7 @@
 // Open Doc for the active bucket's synced Google Doc.
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
-import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, STATUSES } from "./src/db.js";
+import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, STATUSES, EXPORT_COLS } from "./src/db.js";
 import { enqueueUpsert } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
@@ -57,6 +57,7 @@ const els = {
   sheetBucket: document.getElementById("sheet-bucket"),
   sheetMain: document.getElementById("sheet-main"),
   sheetInput: document.getElementById("sheet-input"),
+  sheetKey: document.getElementById("sheet-key"),
   sheetAdd: document.getElementById("sheet-add"),
   sheetRows: document.getElementById("sheet-rows"),
   sheetEmpty: document.getElementById("sheet-empty"),
@@ -108,6 +109,16 @@ async function init() {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       onSheetAdd();
+    }
+  });
+  els.sheetKey.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      onSheetAdd();
+    } else if (e.key === "Enter") {
+      // plain Enter in the key field just moves on to the data field
+      e.preventDefault();
+      els.sheetInput.focus();
     }
   });
   chrome.storage.local.get("panelKind", (o) => setKind(o.panelKind === "sheet" ? "sheet" : "doc"));
@@ -409,6 +420,7 @@ async function refreshSheetBuckets(selectId) {
     els.sheetBucket.appendChild(opt);
   }
   els.sheetInput.disabled = !sheets.length;
+  els.sheetKey.disabled = !sheets.length;
   els.sheetAdd.disabled = !sheets.length;
   if (chosen) {
     els.sheetBucket.value = chosen;
@@ -437,6 +449,13 @@ async function renderSheetRows() {
 
     const txt = document.createElement("span");
     txt.className = "txt";
+    if (e.key) {
+      const chip = document.createElement("span");
+      chip.className = "key";
+      chip.textContent = e.key;
+      chip.title = e.key;
+      txt.appendChild(chip);
+    }
     if (/^https?:\/\/\S+$/.test(e.content || "")) {
       const a = document.createElement("a");
       a.href = e.content;
@@ -445,7 +464,7 @@ async function renderSheetRows() {
       a.rel = "noreferrer";
       txt.appendChild(a);
     } else {
-      txt.textContent = e.content || "(empty)";
+      txt.appendChild(document.createTextNode(e.content || "(empty)"));
     }
     if (e.sourceTitle || e.sourceUrl) {
       const src = document.createElement("span");
@@ -479,7 +498,9 @@ async function renderSheetRows() {
 
 async function onSheetAdd() {
   const text = els.sheetInput.value.trim();
+  const key = els.sheetKey.value.trim();
   if (!text || !activeSheet) {
+    // Key alone isn't an entry — Data is the required field.
     els.sheetInput.focus();
     return;
   }
@@ -490,12 +511,14 @@ async function onSheetAdd() {
     sourceUrl: tab?.url || "",
     sourceTitle: tab?.title || "",
   });
+  if (key) entry.key = key;
   await addEntry(entry);
   await setLastBucketId(activeSheet);
   await enqueueUpsert(entry.id);
   await signalDump();
   els.sheetInput.value = "";
-  els.sheetInput.focus();
+  els.sheetKey.value = "";
+  els.sheetKey.focus();
   await renderSheetRows();
   track("feature", { name: "panel-sheet-add" });
 }
@@ -894,7 +917,7 @@ async function onOpenSheet() {
 // pre-checked; select more, or "All trackers". Multi-select exports one file —
 // Excel gets a worksheet per bucket, JSON one key per bucket.
 
-const EXPORT_COLS = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+// EXPORT_COLS is shared with the workspace exports — see src/db.js.
 let pickFormat = "xlsx"; // format chosen from the menu; used by the Export button
 
 function onExportXlsx() {

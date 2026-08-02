@@ -353,13 +353,17 @@
       }
       .sheet-add {
         display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .sheet-add-row {
+        display: flex;
         gap: 8px;
         align-items: flex-end;
       }
-      .sheet-add textarea {
-        flex: 1;
+      .sheet-add textarea,
+      .sheet-add .sheet-key {
         min-width: 0;
-        resize: none;
         border: 1px solid var(--border);
         border-radius: 10px;
         padding: 8px 10px;
@@ -368,7 +372,17 @@
         font: inherit;
         font-size: 12.5px;
       }
-      .sheet-add textarea:focus {
+      .sheet-add textarea {
+        flex: 1;
+        resize: none;
+      }
+      .sheet-add .sheet-key {
+        width: 100%;
+        font-size: 12px;
+        padding: 6px 10px;
+      }
+      .sheet-add textarea:focus,
+      .sheet-add .sheet-key:focus {
         outline: none;
         border-color: var(--accent);
         box-shadow: var(--ring);
@@ -414,6 +428,22 @@
         display: block;
         font-size: 10.5px;
         color: var(--faint);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* optional key — accent-tinted chip before the data text */
+      .sheet-row .key {
+        display: inline-block;
+        max-width: 45%;
+        margin-right: 6px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--accent);
+        font-size: 10.5px;
+        font-weight: 700;
+        vertical-align: 1px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -643,8 +673,13 @@
 
     <section class="sheet-main" id="sheet-main" hidden>
       <div class="sheet-add">
-        <textarea id="sheet-input" rows="2" placeholder="Add to this tracker… (⌘/Ctrl+Enter)"></textarea>
-        <button id="sheet-add" class="primary-btn">Add</button>
+        <input id="sheet-key" class="sheet-key" type="text"
+          placeholder="Key (optional) — e.g. username, id"
+          title="Optional key — lands in its own column next to the data" />
+        <div class="sheet-add-row">
+          <textarea id="sheet-input" rows="2" placeholder="Data — add to this tracker… (⌘/Ctrl+Enter)"></textarea>
+          <button id="sheet-add" class="primary-btn">Add</button>
+        </div>
       </div>
       <div id="sheet-rows" class="sheet-rows"></div>
       <div id="sheet-empty" class="sheet-empty" hidden>
