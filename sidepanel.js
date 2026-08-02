@@ -498,11 +498,29 @@ async function renderSheetRows() {
       track("feature", { name: "panel-status" });
     });
 
+    // Copy just the Data value — never the key, source, or status.
+    const copy = document.createElement("button");
+    copy.className = "row-btn row-copy";
+    copy.title = "Copy the value";
+    copy.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="9" y="9" width="12" height="12" rx="2.5"/>' +
+      '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(e.content || "");
+        showToast("Copied");
+        track("feature", { name: "panel-sheet-copy" });
+      } catch {
+        showToast("Couldn't copy — clipboard blocked", true);
+      }
+    });
+
     // Two-step delete: first click arms a red "Delete?" for 3s (a native
     // confirm() dialog is unreliable inside the side panel), second click
     // actually deletes. Anything else lets it quietly revert to ✕.
     const del = document.createElement("button");
-    del.className = "row-del";
+    del.className = "row-btn row-del";
     del.textContent = "✕";
     del.title = "Delete this entry";
     let confirmTimer = null;
@@ -527,7 +545,7 @@ async function renderSheetRows() {
       track("feature", { name: "panel-sheet-delete" });
     });
 
-    row.append(txt, pill, del);
+    row.append(txt, pill, copy, del);
     els.sheetRows.appendChild(row);
   }
 }
