@@ -691,6 +691,10 @@
       .ai-modal, .quiz-modal, .ask-modal {
         max-width: 340px;
       }
+      /* settings must win if it is ever opened over the quiz/ask overlays */
+      #ai-backdrop {
+        z-index: 26;
+      }
       .ai-provider-row {
         display: flex;
         gap: 8px;

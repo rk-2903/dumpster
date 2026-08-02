@@ -20,7 +20,7 @@ import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
 import { ytGrabTranscript } from "./src/ytTranscript.js";
 import { createVoiceInput, voiceSupported } from "./src/voiceInput.js";
-import { getAi, setAi, aiReady, testAi, aiComplete } from "./src/ai.js";
+import { getAi, setAi, aiReady, testAi, aiComplete, checkOllamaUrl } from "./src/ai.js";
 import { getToken, getConnection } from "./src/googleAuth.js";
 import { createDocsProvider } from "./src/docsSync.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
@@ -1042,6 +1042,7 @@ function insertDictation(text) {
 
 let aiDraft = null; // settings being edited in the modal
 let quizState = null; // { qs: [{q, options, answer, why}], i, score }
+let askBusy = false; // one question in flight at a time
 const askHistory = []; // rolling {role, text} for follow-up questions
 
 const AI_INPUT_CAP = 28000; // chars of doc text per request (fits free tiers)
@@ -1103,7 +1104,7 @@ async function requireAi() {
   const s = await getAi();
   if (aiReady(s)) return s;
   showToast("Set up AI first — your own Gemini key, or local Ollama", true);
-  openAiSettings();
+  openAiSettings(); // closes the quiz/ask overlays so settings isn't buried
   return null;
 }
 
@@ -1112,19 +1113,30 @@ function setAiBusy(b) {
   for (const el of [els.aiSummarize, els.aiFlashcards, els.aiQuiz, els.aiAsk]) el.disabled = b;
 }
 
-// Append markdown at the end of the doc through the undo-preserving path
-// (replaceRange falls back to a value write + input event, so autosave and
-// the live preview follow, same as dictation appends).
-function appendToDoc(md) {
+// Append markdown at the end of the doc. Must switch to Write first: the
+// editor is display:none in Preview (the default mode), so focus() is a no-op
+// and execCommand would type into whatever else holds the selection — e.g. the
+// Ask box the user just typed into. Then persist and re-render explicitly
+// rather than relying on the autosave debounce.
+async function appendToDoc(md) {
+  const bucketId = activeBucket;
+  const wasPreview = mode === "preview";
+  setMode("write");
   const v = els.editor.value;
   const glue = !v ? "" : /\n$/.test(v) ? "\n" : "\n\n";
   const ins = glue + md.trim() + "\n";
   replaceRange(v.length, v.length, ins, v.length + ins.length, v.length + ins.length);
+  clearTimeout(saveTimer);
+  await setBody(bucketId, els.editor.value);
+  els.saveState.textContent = "Saved";
+  if (wasPreview) setMode("preview"); // renders the fresh body
 }
 
 // -- settings modal --
 
 async function openAiSettings() {
+  els.quizBackdrop.hidden = true;
+  els.askBackdrop.hidden = true;
   aiDraft = await getAi();
   if (!aiDraft.provider) aiDraft.provider = "gemini";
   renderAiSettings();
@@ -1179,6 +1191,16 @@ async function onAiTest() {
 
 async function onAiSave() {
   readAiDraft();
+  let origin = "https://generativelanguage.googleapis.com/*";
+  if (aiDraft.provider === "ollama") {
+    // Refuse non-local hosts: sending notes to someone else's "Ollama" would
+    // quietly break the promise this feature makes.
+    const check = checkOllamaUrl(aiDraft.ollamaUrl);
+    if (!check.ok) return aiStatus(check.error);
+    aiDraft.ollamaUrl = check.url;
+    els.aiOllamaUrl.value = check.url;
+    origin = check.originPattern;
+  }
   if (!aiReady(aiDraft)) {
     aiStatus(
       aiDraft.provider === "gemini"
@@ -1188,18 +1210,18 @@ async function onAiSave() {
     return;
   }
   await setAi(aiDraft);
-  // Cross-origin fetches from the panel are smoothest with a host grant; the
-  // one-time <all_urls> capture grant already covers it, so this prompts only
-  // when that was never given. Best-effort — plain CORS works for Gemini.
+  // A host grant makes the cross-origin call reliable; the one-time <all_urls>
+  // capture grant usually covers it already, so this prompts rarely. Requested
+  // straight off the click while the activation is fresh; failures are
+  // non-fatal (plain CORS works for Gemini and for a correctly-configured
+  // Ollama), so we only log them.
   try {
-    const origin =
-      aiDraft.provider === "gemini"
-        ? "https://generativelanguage.googleapis.com/*"
-        : `${new URL(aiDraft.ollamaUrl).protocol}//${new URL(aiDraft.ollamaUrl).hostname}/*`;
     if (!(await chrome.permissions.contains({ origins: [origin] }))) {
       await chrome.permissions.request({ origins: [origin] });
     }
-  } catch {}
+  } catch (err) {
+    console.warn("[dumpster] AI host permission not granted:", err);
+  }
   els.aiBackdrop.hidden = true;
   showToast(`AI ready — ${aiDraft.provider === "gemini" ? aiDraft.geminiModel : aiDraft.ollamaModel}`);
   track("feature", { name: "ai-setup" });
@@ -1211,6 +1233,7 @@ async function onAiSummarize() {
   if (!(await requireAi())) return;
   const text = els.editor.value.trim();
   if (!text) return showToast("This doc is empty — capture something first", true);
+  const startedIn = activeBucket; // don't write a summary into a doc switched to mid-flight
   setAiBusy(true);
   try {
     const out = await aiComplete({
@@ -1220,7 +1243,8 @@ async function onAiSummarize() {
         "ending with a **Key takeaways** list. Keep any [m:ss] timestamps beside the points " +
         `they support. Reply with the summary only.\n\nNOTES:\n${clipDoc(text)}`,
     });
-    appendToDoc(`## Summary\n\n${out}`);
+    if (activeBucket !== startedIn) return showToast("You switched docs — summary discarded", true);
+    await appendToDoc(`## Summary\n\n${out}`);
     showToast("Summary added to the doc");
     track("feature", { name: "ai-summary" });
   } catch (err) {
@@ -1236,6 +1260,8 @@ async function onAiFlashcards() {
   if (!(await requireAi())) return;
   const text = els.editor.value.trim();
   if (!text) return showToast("This doc is empty — capture something first", true);
+  const startedIn = activeBucket;
+  const docName = (await getBuckets()).find((b) => b.id === startedIn)?.name || "Doc";
   setAiBusy(true);
   try {
     const data = await aiComplete({
@@ -1246,12 +1272,11 @@ async function onAiFlashcards() {
         'sentences. Return ONLY this JSON shape: {"cards":[{"q":"question","a":"answer"}]}' +
         `\n\nNOTES:\n${clipDoc(text)}`,
     });
-    const cards = (Array.isArray(data) ? data : data.cards || [])
+    const cards = (Array.isArray(data) ? data : data?.cards || [])
       .filter((c) => c && typeof c.q === "string" && typeof c.a === "string" && c.q.trim() && c.a.trim())
       .slice(0, 20);
     if (!cards.length) throw new Error("No usable flashcards came back — try again");
 
-    const docName = (await getBuckets()).find((b) => b.id === activeBucket)?.name || "Doc";
     const name = `${docName} Flashcards`;
     const bucket =
       (await getBuckets()).find((b) => b.kind === "sheet" && b.name === name) ||
@@ -1293,7 +1318,7 @@ async function onAiQuiz() {
         '["…","…","…","…"],"answer":0,"why":"one-line explanation"}]} where answer is the ' +
         `0-based index of the correct option.\n\nNOTES:\n${clipDoc(text)}`,
     });
-    const qs = (data.questions || [])
+    const qs = (Array.isArray(data) ? data : data?.questions || [])
       .filter(
         (q) =>
           q &&
@@ -1377,11 +1402,14 @@ async function buildAskContext(question) {
   const chunks = [];
   for (const b of buckets) {
     if (b.kind === "doc") {
+      // The doc body already contains every captured entry — indexing the
+      // entries too would duplicate the same text and halve the context.
       const body = (await getBody(b.id)) || "";
       for (const part of body.split(/\n\n+/)) {
         const t = part.trim();
         if (t) chunks.push({ bucket: b.name, text: t.slice(0, 700) });
       }
+      continue;
     }
     for (const e of await getEntriesByBucket(b.id)) {
       const t = [e.key, e.content, e.notes].filter(Boolean).join(" — ").trim();
@@ -1395,12 +1423,13 @@ async function buildAskContext(question) {
     for (const t of terms) if (lt.includes(t)) s++;
     return s;
   };
-  const ranked = chunks
+  // Only send chunks that actually match the question. No fallback: shipping
+  // unrelated notes to the provider just because nothing matched would leak
+  // material the question never asked about.
+  const pool = chunks
     .map((c) => ({ ...c, s: scoreOf(c) }))
+    .filter((c) => c.s > 0)
     .sort((a, b) => b.s - a.s);
-  // Prefer matching chunks; fall back to the most recent material when the
-  // question shares no words with the notes.
-  const pool = ranked[0]?.s ? ranked.filter((c) => c.s > 0) : ranked;
   const picked = [];
   let used = 0;
   for (const c of pool) {
@@ -1417,9 +1446,21 @@ async function buildAskContext(question) {
 }
 
 async function onAskSend() {
+  // Enter-to-send bypasses the disabled button, so gate on our own flag —
+  // otherwise a second question fires a concurrent call and the answers
+  // interleave (and burn double quota).
+  if (askBusy) return;
   const q = els.askInput.value.trim();
   if (!q) return;
-  if (!(await requireAi())) return;
+  askBusy = true; // claimed BEFORE any await — the storage hop in requireAi
+  // is long enough for a second Enter to slip through otherwise.
+  let started = false;
+  try {
+    if (!(await requireAi())) return;
+    started = true;
+  } finally {
+    if (!started) askBusy = false;
+  }
   els.askInput.value = "";
   addAskMsg("q", q);
   const thinking = addAskMsg("a", "Thinking…");
@@ -1442,7 +1483,9 @@ async function onAskSend() {
     });
     thinking.remove();
     const a = addAskMsg("a", "");
-    a.innerHTML = renderMarkdown(out, {});
+    // Model output is untrusted (notes can contain text captured from pages):
+    // block remote <img> so a reply can't beacon note content out on render.
+    a.innerHTML = renderMarkdown(out, { allowRemoteImages: false });
     if (ctx.legend) {
       const src = document.createElement("div");
       src.className = "src";
@@ -1464,6 +1507,7 @@ async function onAskSend() {
     thinking.classList.remove("thinking");
     thinking.textContent = err.message;
   } finally {
+    askBusy = false;
     els.askSend.disabled = false;
   }
 }

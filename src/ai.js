@@ -49,6 +49,31 @@ export function aiReady(s) {
 }
 
 const trimSlash = (u) => String(u || "").replace(/\/+$/, "");
+// Gemini ids are sometimes written "models/gemini-2.5-flash"; the REST path
+// already includes /models/, so normalise at the boundary.
+const modelId = (m) => String(m || "").trim().replace(/^models\//, "");
+
+// Ollama is meant to be YOUR machine. Anything else would ship note text to a
+// third party under a "nothing leaves your computer" promise, so the settings
+// UI refuses non-local hosts.
+const LOCAL_HOST = /^(localhost|127(\.\d+){3}|\[?::1\]?|0\.0\.0\.0|.+\.local|10(\.\d+){3}|192\.168(\.\d+){2}|172\.(1[6-9]|2\d|3[01])(\.\d+){2})$/i;
+export function checkOllamaUrl(raw) {
+  let u;
+  try {
+    u = new URL(String(raw || "").trim());
+  } catch {
+    return { ok: false, error: "That doesn't look like a URL — try http://localhost:11434" };
+  }
+  if (!/^https?:$/.test(u.protocol)) return { ok: false, error: "Ollama URL must start with http:// or https://" };
+  if (!u.hostname || u.hostname.includes("*")) return { ok: false, error: "Enter a real host, e.g. http://localhost:11434" };
+  if (!LOCAL_HOST.test(u.hostname)) {
+    return {
+      ok: false,
+      error: `"${u.hostname}" isn't on your machine or local network — your notes would be sent there. Use localhost or a private address.`,
+    };
+  }
+  return { ok: true, url: `${u.protocol}//${u.host}`, originPattern: `${u.protocol}//${u.hostname}/*` };
+}
 
 // Friendly connection check. For Ollama also returns the locally available
 // models so the settings UI can offer a picker.
@@ -56,14 +81,21 @@ export async function testAi(s) {
   try {
     if (s.provider === "gemini") {
       if (!s.geminiKey) return { ok: false, error: "Enter your Gemini API key" };
+      // Validate the model too, so Test can't say "Connected" and then have
+      // every action 404 on a mistyped model name.
       const res = await deps.fetchImpl(
-        `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1&key=${encodeURIComponent(s.geminiKey)}`
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+          modelId(s.geminiModel) || "gemini-2.5-flash"
+        )}?key=${encodeURIComponent(s.geminiKey)}`
       );
       if (!res.ok) return { ok: false, error: await geminiError(res) };
       return { ok: true };
     }
     if (s.provider === "ollama") {
+      const check = checkOllamaUrl(s.ollamaUrl);
+      if (!check.ok) return check;
       const res = await deps.fetchImpl(`${trimSlash(s.ollamaUrl)}/api/tags`);
+      if (res.status === 403) return { ok: false, error: OLLAMA_UNREACHABLE };
       if (!res.ok) return { ok: false, error: `Ollama answered ${res.status} — check the URL` };
       const data = await res.json();
       const models = (data.models || []).map((m) => m.name);
@@ -134,7 +166,7 @@ export async function aiComplete({ system = "", prompt, json = false }) {
 
   if (s.provider === "gemini") {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      s.geminiModel
+      modelId(s.geminiModel)
     )}:generateContent?key=${encodeURIComponent(s.geminiKey)}`;
     let res;
     try {
@@ -155,8 +187,20 @@ export async function aiComplete({ system = "", prompt, json = false }) {
     }
     if (!res.ok) throw new Error(await geminiError(res));
     const data = await res.json();
-    const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-    if (!text) throw new Error("Gemini returned an empty reply — try again");
+    // A blocked prompt or a truncated/filtered candidate comes back 200 with
+    // no text — say which it was instead of a generic "empty reply".
+    const blocked = data.promptFeedback?.blockReason;
+    if (blocked) throw new Error(`Gemini blocked this request (${blocked}) — try trimming the notes`);
+    const cand = data.candidates?.[0];
+    const text = (cand?.content?.parts || []).map((p) => p.text || "").join("");
+    if (!text) {
+      const fin = cand?.finishReason;
+      if (fin === "MAX_TOKENS") throw new Error("Gemini hit its output limit — summarize a shorter section");
+      if (fin === "SAFETY" || fin === "PROHIBITED_CONTENT")
+        throw new Error("Gemini's safety filter blocked this reply — try rephrasing or a different section");
+      if (fin === "RECITATION") throw new Error("Gemini stopped (recitation filter) — try rephrasing");
+      throw new Error("Gemini returned an empty reply — try again");
+    }
     return json ? extractJson(text) : text.trim();
   }
 
