@@ -291,6 +291,9 @@ body {
 .col-time {
   width: 120px;
 }
+.col-key {
+  width: 130px;
+}
 .col-source {
   width: 200px;
 }
@@ -652,6 +655,21 @@ textarea.editable::placeholder {
 .card.dragging {
   opacity: 0.45;
 }
+/* Optional key — accent chip above the card's content. */
+.card-key {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .card-content {
   font-size: 13px;
   line-height: 1.45;
@@ -876,6 +894,12 @@ textarea.editable::placeholder {
 /* Doc buckets have no workflow status. */
 .entries.no-status .col-status,
 .entries.no-status .cell-status {
+  display: none;
+}
+
+/* Doc buckets have no key column either. */
+.entries.no-key .col-key,
+.entries.no-key .cell-key {
   display: none;
 }
 
