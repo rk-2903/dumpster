@@ -304,6 +304,72 @@
         white-space: nowrap;
       }
 
+      /* ---- Voice input (dictation) ---- */
+      .voice-wrap {
+        position: relative;
+        display: flex;
+        gap: 2px;
+        flex: 0 0 auto;
+      }
+      .voice-wrap .secondary-btn {
+        flex: 0 0 auto;
+      }
+      .voice-btn {
+        padding: 8px 14px;
+      }
+      .voice-btn svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .voice-btn.rec {
+        background: #ef4444;
+        border-color: #ef4444;
+        color: #fff;
+        animation: voicepulse 1.5s ease-in-out infinite;
+      }
+      @keyframes voicepulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
+        50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+      }
+      .voice-lang {
+        padding: 8px 7px;
+        font-size: 10.5px;
+        white-space: nowrap;
+      }
+      .export-menu.voice-menu {
+        left: 0;
+        right: auto;
+        max-height: 250px;
+        overflow-y: auto;
+        white-space: nowrap;
+      }
+      .voice-menu button.sel {
+        background: var(--surface2);
+      }
+      /* live interim words while dictating */
+      .voice-live {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 0;
+        max-width: 280px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        padding: 8px 11px;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--faint);
+        z-index: 14;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .voice-live[hidden] {
+        display: none !important;
+      }
+
       /* ---- Cloud status chip ---- */
       .cloud-chip {
         display: flex;
@@ -689,6 +755,18 @@
     </section>
 
     <div class="capture-bar" id="doc-bar">
+      <div class="voice-wrap">
+        <button id="voice-btn" class="secondary-btn voice-btn"
+          title="Dictate into the doc — speaks land at your cursor (or at the end if the editor isn't focused). Click again to stop.">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2.5" width="6" height="12" rx="3"/>
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3.5M8.5 21.5h7"/>
+          </svg>
+        </button>
+        <button id="voice-lang" class="secondary-btn voice-lang" title="Dictation language">EN ▾</button>
+        <div id="voice-menu" class="export-menu voice-menu" hidden></div>
+        <div id="voice-live" class="voice-live" hidden></div>
+      </div>
       <button id="share-doc" class="secondary-btn" title="Copy the doc's Google Docs link">⇪ Share</button>
       <button id="open-doc" class="secondary-btn" title="Open this doc">↗ Open Doc</button>
       <div class="export-wrap">

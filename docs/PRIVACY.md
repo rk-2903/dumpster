@@ -22,6 +22,15 @@ and stays on your device unless *you* connect your own Google account.
   the popup.
 - **Page context** — when you save from a page, the current tab's URL and title
   are attached to that dump so you remember where it came from.
+- **Voice input (optional)** — the doc panel's mic button dictates notes using
+  your **browser's built-in speech recognition** (the Web Speech API). While the
+  mic is on, Chrome streams the audio to **Google's speech service** to turn it
+  into text — that processing is done by your browser under Google's terms, not
+  by Dumpster. Dumpster itself **never records, stores, or transmits audio**;
+  only the recognized text lands in your doc, on your device. The mic is only
+  active while the button glows red, microphone access is granted once by you
+  and revocable anytime (`chrome://settings/content/microphone`), and the
+  feature simply stays off if you never grant it.
 
 Dumpster has no user accounts, no advertising, and no cross-site tracking, and
 it never reads your browsing history. It does collect **anonymous, opt-out usage

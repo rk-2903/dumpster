@@ -19,6 +19,7 @@ import { enqueueUpsert } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
 import { ytGrabTranscript } from "./src/ytTranscript.js";
+import { createVoiceInput, voiceSupported } from "./src/voiceInput.js";
 import { getToken, getConnection } from "./src/googleAuth.js";
 import { createDocsProvider } from "./src/docsSync.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
@@ -43,6 +44,10 @@ const els = {
   capOcr: document.getElementById("cap-ocr"),
   capTs: document.getElementById("cap-ts"),
   capTsMenu: document.getElementById("cap-ts-menu"),
+  voiceBtn: document.getElementById("voice-btn"),
+  voiceLang: document.getElementById("voice-lang"),
+  voiceMenu: document.getElementById("voice-menu"),
+  voiceLive: document.getElementById("voice-live"),
   shareDoc: document.getElementById("share-doc"),
   openDoc: document.getElementById("open-doc"),
   saveState: document.getElementById("save-state"),
@@ -182,7 +187,9 @@ async function init() {
     els.exportMenu.hidden = true;
     els.sheetExportMenu.hidden = true;
     els.capTsMenu.hidden = true;
+    els.voiceMenu.hidden = true;
   });
+  setupVoice();
   els.exportPdf.addEventListener("click", onExportPdf);
   els.exportDocx.addEventListener("click", onExportDocx);
   els.exportMd.addEventListener("click", onExportMd);
@@ -795,6 +802,157 @@ async function onTranscriptCapture(windowSec) {
     );
   } finally {
     els.capTs.disabled = false;
+  }
+}
+
+// ---- Voice input (dictation) ----
+// Chrome's built-in Web Speech API — free, no keys, ~100 languages. The side
+// panel can't show the mic permission prompt itself, so the first use routes
+// through micgrant.html in a tab (one grant, persists for the extension).
+// Finals land at the editor's caret when it has focus (undo-friendly via
+// replaceRange); otherwise they're appended at the end of the doc.
+
+const VOICE_LANGS = [
+  { code: "en-US", label: "English (US)" },
+  { code: "en-IN", label: "English (India)" },
+  { code: "hi-IN", label: "हिन्दी — Hindi" },
+  { code: "bn-IN", label: "বাংলা — Bengali" },
+  { code: "ta-IN", label: "தமிழ் — Tamil" },
+  { code: "te-IN", label: "తెలుగు — Telugu" },
+  { code: "mr-IN", label: "मराठी — Marathi" },
+  { code: "gu-IN", label: "ગુજરાતી — Gujarati" },
+  { code: "kn-IN", label: "ಕನ್ನಡ — Kannada" },
+  { code: "ml-IN", label: "മലയാളം — Malayalam" },
+  { code: "pa-IN", label: "ਪੰਜਾਬੀ — Punjabi" },
+  { code: "ur-IN", label: "اردو — Urdu" },
+  { code: "ne-NP", label: "नेपाली — Nepali" },
+  { code: "es-ES", label: "Español — Spanish" },
+  { code: "fr-FR", label: "Français — French" },
+  { code: "de-DE", label: "Deutsch — German" },
+  { code: "it-IT", label: "Italiano — Italian" },
+  { code: "pt-BR", label: "Português (Brasil)" },
+  { code: "ru-RU", label: "Русский — Russian" },
+  { code: "ja-JP", label: "日本語 — Japanese" },
+  { code: "ko-KR", label: "한국어 — Korean" },
+  { code: "zh-CN", label: "中文（简体）— Chinese" },
+  { code: "ar-SA", label: "العربية — Arabic" },
+  { code: "id-ID", label: "Bahasa Indonesia" },
+  { code: "tr-TR", label: "Türkçe — Turkish" },
+  { code: "vi-VN", label: "Tiếng Việt — Vietnamese" },
+  { code: "th-TH", label: "ไทย — Thai" },
+];
+
+let voiceLang = "en-US";
+let dictAppended = false; // first append of a session opens a new paragraph
+
+const voice = createVoiceInput({
+  getLang: () => voiceLang,
+  onFinal: insertDictation,
+  onInterim: (t) => {
+    els.voiceLive.textContent = t;
+    els.voiceLive.hidden = !t;
+  },
+  onState: (on) => {
+    els.voiceBtn.classList.toggle("rec", on);
+    if (!on) dictAppended = false;
+  },
+  onError: (msg, code) => {
+    els.voiceBtn.classList.remove("rec");
+    if (code === "not-allowed" || code === "service-not-allowed") return openMicGrant();
+    showToast(msg, true);
+  },
+});
+
+function voiceLangDefault() {
+  const ui = (chrome.i18n?.getUILanguage?.() || "en").toLowerCase();
+  const hit =
+    VOICE_LANGS.find((l) => l.code.toLowerCase() === ui) ||
+    VOICE_LANGS.find((l) => l.code.slice(0, 2) === ui.slice(0, 2));
+  return hit?.code || "en-US";
+}
+
+function setupVoice() {
+  chrome.storage.local.get(["voiceLang"], (o) => {
+    voiceLang = o.voiceLang || voiceLangDefault();
+    renderVoiceMenu();
+  });
+  // Keep the editor's focus/caret — the whole point of the cursor-insert path.
+  for (const el of [els.voiceBtn, els.voiceLang, els.voiceMenu]) {
+    el.addEventListener("mousedown", (e) => e.preventDefault());
+  }
+  els.voiceBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onVoiceToggle();
+  });
+  els.voiceLang.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.exportMenu.hidden = true;
+    els.capTsMenu.hidden = true;
+    els.voiceMenu.hidden = !els.voiceMenu.hidden;
+  });
+  els.voiceMenu.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-lang]");
+    if (!b) return;
+    e.stopPropagation();
+    voiceLang = b.dataset.lang;
+    chrome.storage.local.set({ voiceLang });
+    els.voiceMenu.hidden = true;
+    renderVoiceMenu();
+  });
+}
+
+function renderVoiceMenu() {
+  const cur = VOICE_LANGS.find((l) => l.code === voiceLang);
+  els.voiceLang.textContent = voiceLang.slice(0, 2).toUpperCase() + " ▾";
+  els.voiceLang.title = `Dictation language — ${cur ? cur.label : voiceLang}`;
+  els.voiceMenu.innerHTML = "";
+  for (const l of VOICE_LANGS) {
+    const b = document.createElement("button");
+    b.dataset.lang = l.code;
+    b.textContent = l.label;
+    if (l.code === voiceLang) b.classList.add("sel");
+    els.voiceMenu.appendChild(b);
+  }
+}
+
+async function onVoiceToggle() {
+  if (!voiceSupported()) return showToast("Dictation isn't supported in this browser", true);
+  if (voice.active) return voice.stop();
+  let state = "prompt";
+  try {
+    state = (await navigator.permissions.query({ name: "microphone" })).state;
+  } catch {}
+  if (state !== "granted") return openMicGrant();
+  track("feature", { name: "panel-voice" });
+  voice.start();
+}
+
+function openMicGrant() {
+  voice.stop();
+  chrome.tabs.create({ url: chrome.runtime.getURL("micgrant.html") });
+  showToast("Allow the microphone once in the new tab, then click the mic again");
+}
+
+function insertDictation(text) {
+  const chunk = text.trim();
+  if (!chunk || !activeBucket) return;
+  const v = els.editor.value;
+  if (mode === "write" && document.activeElement === els.editor) {
+    const s = els.editor.selectionStart;
+    const e = els.editor.selectionEnd;
+    const glueBefore = s && !/\s$/.test(v.slice(0, s)) ? " " : "";
+    const glueAfter = v.slice(e) && !/^\s/.test(v.slice(e)) ? " " : "";
+    const ins = glueBefore + chunk + glueAfter;
+    replaceRange(s, e, ins, s + ins.length, s + ins.length);
+  } else {
+    // Editor not focused (or Preview mode) → append at the end of the doc,
+    // opening a fresh paragraph for the session's first phrase. replaceRange
+    // falls back to a value write + input event when the hidden editor can't
+    // take execCommand, so autosave and the live preview still kick in.
+    const glue = !v ? "" : dictAppended ? " " : /\n$/.test(v) ? "" : "\n\n";
+    const ins = glue + chunk;
+    replaceRange(v.length, v.length, ins, v.length + ins.length, v.length + ins.length);
+    dictAppended = true;
   }
 }
 
