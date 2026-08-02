@@ -53,7 +53,12 @@ you meant to come back to.
       entries (⌘/Ctrl+Enter, current page attached as source), and flip the
       newest rows' **status pills** (To Do / In Process / Done) inline —
       changes sync and live-refresh an open workspace. The mode and last
-      tracker are remembered.
+      tracker are remembered. Each add has two fields: an optional **Key**
+      (a label like `username` or `id`) above the **Data** — they land in
+      **separate columns** in the workspace table, the synced Google Sheet,
+      and exports, so key/value trackers stay structured. (Note: trackers are
+      **not encrypted** — locally or in your Google Sheet — so avoid storing
+      real passwords or secrets.)
     - **Bottom bar** (per mode) — **⇪ Share** and **↗ Open** deep-link to the
       bucket's Google Doc or its exact spreadsheet tab, and **⇓ Export**:
       a Doc exports as **PDF** (print-styled page → Save as PDF),
