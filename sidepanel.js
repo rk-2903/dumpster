@@ -498,11 +498,27 @@ async function renderSheetRows() {
       track("feature", { name: "panel-status" });
     });
 
+    // Two-step delete: first click arms a red "Delete?" for 3s (a native
+    // confirm() dialog is unreliable inside the side panel), second click
+    // actually deletes. Anything else lets it quietly revert to ✕.
     const del = document.createElement("button");
     del.className = "row-del";
     del.textContent = "✕";
     del.title = "Delete this entry";
+    let confirmTimer = null;
     del.addEventListener("click", async () => {
+      if (!del.classList.contains("confirm")) {
+        del.classList.add("confirm");
+        del.textContent = "Delete?";
+        del.title = "Click again to delete";
+        confirmTimer = setTimeout(() => {
+          del.classList.remove("confirm");
+          del.textContent = "✕";
+          del.title = "Delete this entry";
+        }, 3000);
+        return;
+      }
+      clearTimeout(confirmTimer);
       await deleteEntry(e.id);
       await enqueueDelete(e.id, e.bucketId); // remove the synced sheet row too
       await signalDump(); // live-refresh an open workspace tab
