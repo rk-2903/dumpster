@@ -32,6 +32,19 @@ and stays on your device unless *you* connect your own Google account.
   and revocable anytime (`chrome://settings/content/microphone`), and the
   feature simply stays off if you never grant it.
 
+- **AI features (optional, bring your own)** — Summarize / Flashcards / Quiz /
+  Ask are **off until you connect a provider of your choice**: your own Google
+  Gemini API key, or a local Ollama model on your machine. When you run an AI
+  action, the text of the doc is sent **directly to that provider** — Google's
+  Gemini API under your key and Google's terms, or your own computer for
+  Ollama, which never goes online at all. **Ask your notes** additionally
+  searches across *all* your buckets and sends only the excerpts that match
+  your question (nothing is sent when nothing matches). Ollama must be a
+  local or private-network address — the extension refuses a remote host, so
+  "stays on your machine" stays true. Your API key and settings are stored only on your
+  device, nothing passes through any developer server, and no AI request ever
+  happens except when you click an AI action.
+
 Dumpster has no user accounts, no advertising, and no cross-site tracking, and
 it never reads your browsing history. It does collect **anonymous, opt-out usage
 statistics** to help decide what to improve — described in its own section
