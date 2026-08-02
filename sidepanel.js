@@ -14,8 +14,8 @@
 // Open Doc for the active bucket's synced Google Doc.
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
-import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, STATUSES, EXPORT_COLS } from "./src/db.js";
-import { enqueueUpsert } from "./src/outbox.js";
+import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, deleteEntry, STATUSES, EXPORT_COLS } from "./src/db.js";
+import { enqueueUpsert, enqueueDelete } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
 import { ytGrabTranscript } from "./src/ytTranscript.js";
@@ -498,7 +498,20 @@ async function renderSheetRows() {
       track("feature", { name: "panel-status" });
     });
 
-    row.append(txt, pill);
+    const del = document.createElement("button");
+    del.className = "row-del";
+    del.textContent = "✕";
+    del.title = "Delete this entry";
+    del.addEventListener("click", async () => {
+      await deleteEntry(e.id);
+      await enqueueDelete(e.id, e.bucketId); // remove the synced sheet row too
+      await signalDump(); // live-refresh an open workspace tab
+      row.remove();
+      els.sheetEmpty.hidden = els.sheetRows.children.length > 0;
+      track("feature", { name: "panel-sheet-delete" });
+    });
+
+    row.append(txt, pill, del);
     els.sheetRows.appendChild(row);
   }
 }
