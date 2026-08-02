@@ -498,6 +498,26 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      /* per-row delete — subtle ✕ that turns red on hover */
+      .sheet-row .row-del {
+        flex: none;
+        border: none;
+        background: none;
+        color: var(--faint);
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        font-size: 11px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .sheet-row .row-del:hover {
+        background: color-mix(in srgb, #ef4444 12%, transparent);
+        color: #ef4444;
+      }
       /* optional key — accent-tinted chip before the data text */
       .sheet-row .key {
         display: inline-block;
