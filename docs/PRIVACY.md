@@ -34,10 +34,11 @@ and stays on your device unless *you* connect your own Google account.
 
 - **AI features (optional, bring your own)** — Summarize / Flashcards / Quiz /
   Ask are **off until you connect a provider of your choice**: your own Google
-  Gemini API key, or a local Ollama model on your machine. When you run an AI
-  action, the text of the doc is sent **directly to that provider** — Google's
-  Gemini API under your key and Google's terms, or your own computer for
-  Ollama, which never goes online at all. **Ask your notes** additionally
+  Gemini, OpenAI or Anthropic API key, or a local Ollama model on your machine.
+  When you run an AI action, the text of the doc is sent **directly to the
+  provider you chose** — to Google, OpenAI or Anthropic under your own key and
+  that company's terms, or to your own computer for Ollama, which never goes
+  online at all. Only the active provider's key is ever used or transmitted. **Ask your notes** additionally
   searches across *all* your buckets and sends only the excerpts that match
   your question (nothing is sent when nothing matches). Ollama must be a
   local or private-network address — the extension refuses a remote host, so

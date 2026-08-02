@@ -696,11 +696,11 @@
         z-index: 26;
       }
       .ai-provider-row {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
       }
       .ai-prov {
-        flex: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -1097,6 +1097,8 @@
         <div class="ai-provider-row">
           <button class="ai-prov" data-prov="gemini">Gemini<span>free API key</span></button>
           <button class="ai-prov" data-prov="ollama">Ollama<span>local &amp; private</span></button>
+          <button class="ai-prov" data-prov="openai">OpenAI<span>paid API key</span></button>
+          <button class="ai-prov" data-prov="anthropic">Anthropic<span>paid API key</span></button>
         </div>
         <div id="ai-gemini-fields" hidden>
           <label class="ai-label">API key
@@ -1126,8 +1128,46 @@
           <datalist id="ai-ollama-models"></datalist>
           <p class="ai-hint">
             Run a model on <b>your own machine</b> — install from
-            <a href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>, then start it with
-            <code>OLLAMA_ORIGINS=chrome-extension://*</code> so the extension may connect. Nothing leaves your computer.
+            <a href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>, then allow this extension
+            with <code>OLLAMA_ORIGINS=chrome-extension://*</code>. Nothing leaves your computer.
+            <br /><b>macOS menu-bar app:</b> run
+            <code>launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"</code> then <b>quit and reopen Ollama</b> —
+            a running server won't pick it up until it restarts.
+          </p>
+        </div>
+        <div id="ai-openai-fields" hidden>
+          <label class="ai-label">API key
+            <input id="ai-openai-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="ai-label">Model
+            <input id="ai-openai-model" list="ai-openai-models" spellcheck="false" />
+          </label>
+          <datalist id="ai-openai-models">
+            <option value="gpt-4o-mini"></option>
+            <option value="gpt-4o"></option>
+            <option value="gpt-4.1-mini"></option>
+            <option value="gpt-4.1"></option>
+          </datalist>
+          <p class="ai-hint">
+            Key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>
+            (pay-as-you-go — you're billed by OpenAI for what you use). Your key stays on this device.
+          </p>
+        </div>
+        <div id="ai-anthropic-fields" hidden>
+          <label class="ai-label">API key
+            <input id="ai-anthropic-key" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="ai-label">Model
+            <input id="ai-anthropic-model" list="ai-anthropic-models" spellcheck="false" />
+          </label>
+          <datalist id="ai-anthropic-models">
+            <option value="claude-sonnet-5"></option>
+            <option value="claude-opus-5"></option>
+            <option value="claude-haiku-4-5-20251001"></option>
+          </datalist>
+          <p class="ai-hint">
+            Key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">console.anthropic.com</a>
+            (pay-as-you-go — you're billed by Anthropic for what you use). Your key stays on this device.
           </p>
         </div>
         <p id="ai-status" class="ai-status" hidden></p>
