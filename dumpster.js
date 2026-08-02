@@ -17,6 +17,7 @@ import {
   getImage,
   STATUSES,
   DEFAULT_STATUS,
+  EXPORT_COLS,
 } from "./src/db.js";
 import {
   enqueueUpsert,
@@ -176,6 +177,7 @@ async function renderBucket() {
   activeBucketKind = bucket?.kind === "doc" ? "doc" : "sheet";
   await renderBucketOpenLink(bucket);
   els.table.classList.toggle("no-status", activeBucketKind === "doc");
+  els.table.classList.toggle("no-key", activeBucketKind === "doc");
   // Doc buckets: Document | List. Sheet buckets: List | Board.
   const views = kindViews(activeBucketKind);
   currentView = views.includes(viewPref[activeBucketKind]) ? viewPref[activeBucketKind] : views[0];
@@ -230,7 +232,7 @@ function visibleEntries() {
   const q = els.search.value.trim().toLowerCase();
   if (!q) return currentEntries;
   return currentEntries.filter((e) =>
-    [e.content, e.sourceTitle, e.sourceUrl, e.status, e.notes, e.ocrText || ""]
+    [e.key || "", e.content, e.sourceTitle, e.sourceUrl, e.status, e.notes, e.ocrText || ""]
       .join(" ")
       .toLowerCase()
       .includes(q)
@@ -434,6 +436,13 @@ function renderCard(entry) {
   card.draggable = true;
   card.dataset.id = entry.id;
 
+  if (entry.key) {
+    const k = document.createElement("div");
+    k.className = "card-key";
+    k.textContent = entry.key;
+    k.title = entry.key;
+    card.appendChild(k);
+  }
   const body = document.createElement("div");
   body.className = "card-content";
   body.appendChild(linkify(entry.content));
@@ -532,6 +541,15 @@ function renderRow(entry) {
   time.textContent = formatTime(entry.createdAt);
   time.title = new Date(entry.createdAt).toLocaleString();
 
+  const key = document.createElement("td");
+  key.className = "cell-key";
+  key.appendChild(
+    makeEditable("input", entry.key || "", "Key…", async (val) => {
+      await updateEntry(entry.id, { key: val });
+      enqueueUpsert(entry.id);
+    })
+  );
+
   const content = document.createElement("td");
   content.className = "cell-content";
   renderContentView(content, entry);
@@ -574,7 +592,7 @@ function renderRow(entry) {
   });
   actions.appendChild(del);
 
-  tr.append(time, content, source, status, notes, actions);
+  tr.append(time, key, content, source, status, notes, actions);
   return tr;
 }
 
@@ -794,7 +812,7 @@ async function onDelete() {
 
 // ---- Export ---------------------------------------------------------------
 
-const EXPORT_COLS = ["createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+// EXPORT_COLS is shared with the panel exports — see src/db.js.
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 let exportFormat = "xlsx";
 
@@ -1016,12 +1034,12 @@ async function mergeImport(byBucket) {
 }
 
 function dedupeKey(e) {
-  return `${(e.content || "").trim()} ${e.createdAt || ""}`;
+  return `${(e.key || "").trim()} ${(e.content || "").trim()} ${e.createdAt || ""}`;
 }
 
 function entryFromImport(bucketId, row) {
   const createdAt = toIso(row.createdAt);
-  return {
+  const entry = {
     id: crypto.randomUUID(),
     bucketId,
     content: String(row.content ?? "").trim(),
@@ -1031,6 +1049,9 @@ function entryFromImport(bucketId, row) {
     notes: String(row.notes ?? ""),
     createdAt,
   };
+  const key = String(row.key ?? "").trim();
+  if (key) entry.key = key;
+  return entry;
 }
 
 function toIso(value) {

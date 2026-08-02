@@ -8,8 +8,13 @@
 
 const BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
-// Column order in each tab. id is first so a row can be found by entry id.
-export const ROW_COLS = ["id", "createdAt", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+// Column order in each tab. id is first so a row can be found by entry id;
+// the optional key sits just before the content ("key, data" reading order).
+export const ROW_COLS = ["id", "createdAt", "key", "content", "sourceUrl", "sourceTitle", "status", "notes"];
+// Last column letter (H) — keeps ranges in sync when ROW_COLS grows.
+const LAST_COL = String.fromCharCode(64 + ROW_COLS.length);
+// Bump when a column is added; drives the lazy per-tab header migration.
+const HEADER_V = 2;
 
 const chromeStore = {
   get: (key) => new Promise((r) => chrome.storage.local.get(key, (o) => r(o[key]))),
@@ -64,11 +69,15 @@ export function createSheetsProvider({ getToken, fetchImpl = globalThis.fetch, s
     return candidate;
   }
 
-  // Ensure a tab exists for the bucket; create it (with a header row) if missing.
+  // Ensure a tab exists for the bucket; create it (with a header row) if
+  // missing, and lazily migrate tabs created before the key column existed.
   async function ensureBucketTab(bucketId, bucketName) {
     const spreadsheetId = await ensureSpreadsheet();
     const map = await getTabMap();
-    if (map[bucketId]) return map[bucketId];
+    if (map[bucketId]) {
+      await migrateHeader(spreadsheetId, map, bucketId);
+      return map[bucketId];
+    }
 
     const meta = await api("GET", `${BASE}/${spreadsheetId}?fields=sheets.properties(sheetId,title)`);
     const titles = new Set((meta.sheets || []).map((s) => s.properties.title.toLowerCase()));
@@ -78,13 +87,37 @@ export function createSheetsProvider({ getToken, fetchImpl = globalThis.fetch, s
       requests: [{ addSheet: { properties: { title } } }],
     });
     const sheetId = res.replies[0].addSheet.properties.sheetId;
-    await api("PUT", `${BASE}/${spreadsheetId}/values/${encRange(title, "A1:G1")}?valueInputOption=RAW`, {
+    await api("PUT", `${BASE}/${spreadsheetId}/values/${encRange(title, `A1:${LAST_COL}1`)}?valueInputOption=RAW`, {
       values: [ROW_COLS],
     });
 
-    map[bucketId] = { sheetId, title };
+    map[bucketId] = { sheetId, title, headerV: HEADER_V };
     await store.set(TABMAP_KEY, map);
     return map[bucketId];
+  }
+
+  // Tabs written before the key column have a 7-column layout. Insert an empty
+  // column where "key" now lives (shifting the old C..G right, data intact),
+  // rewrite the header, and stamp the map entry — once per tab.
+  async function migrateHeader(spreadsheetId, map, bucketId) {
+    const tab = map[bucketId];
+    if (!tab || (tab.headerV || 1) >= HEADER_V) return;
+    const keyIndex = ROW_COLS.indexOf("key");
+    await api("POST", `${BASE}/${spreadsheetId}:batchUpdate`, {
+      requests: [
+        {
+          insertDimension: {
+            range: { sheetId: tab.sheetId, dimension: "COLUMNS", startIndex: keyIndex, endIndex: keyIndex + 1 },
+            inheritFromBefore: false,
+          },
+        },
+      ],
+    });
+    await api("PUT", `${BASE}/${spreadsheetId}/values/${encRange(tab.title, `A1:${LAST_COL}1`)}?valueInputOption=RAW`, {
+      values: [ROW_COLS],
+    });
+    map[bucketId] = { ...tab, headerV: HEADER_V };
+    await store.set(TABMAP_KEY, map);
   }
 
   // 1-based row of the entry id in column A, or 0 if absent (row 1 = header).
@@ -132,7 +165,7 @@ export function createSheetsProvider({ getToken, fetchImpl = globalThis.fetch, s
     const row = rowFromEntry(entry);
     const at = await findRow(spreadsheetId, tab.title, entry.id);
     if (at) {
-      await api("PUT", `${BASE}/${spreadsheetId}/values/${encRange(tab.title, `A${at}:G${at}`)}?valueInputOption=RAW`, {
+      await api("PUT", `${BASE}/${spreadsheetId}/values/${encRange(tab.title, `A${at}:${LAST_COL}${at}`)}?valueInputOption=RAW`, {
         values: [row],
       });
     } else {
