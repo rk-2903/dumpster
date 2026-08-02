@@ -498,8 +498,8 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      /* per-row delete — subtle ✕ that turns red on hover */
-      .sheet-row .row-del {
+      /* per-row icon buttons (copy / delete) — subtle, colored on hover */
+      .sheet-row .row-btn {
         flex: none;
         border: none;
         background: none;
@@ -513,6 +513,15 @@
         display: flex;
         align-items: center;
         justify-content: center;
+      }
+      .sheet-row .row-btn svg {
+        width: 13px;
+        height: 13px;
+        display: block;
+      }
+      .sheet-row .row-copy:hover {
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--accent);
       }
       .sheet-row .row-del:hover {
         background: color-mix(in srgb, #ef4444 12%, transparent);
