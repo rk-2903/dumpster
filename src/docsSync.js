@@ -258,8 +258,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const requests = [];
     let end;
     if (existing) {
-      requests.push({ deleteNamedRange: { name: REFS_RANGE } });
-      requests.push({ deleteContentRange: { range: r(existing.start, existing.end) } });
+      requests.push(...deleteRangeReqs(doc, REFS_RANGE, existing));
       end = existing.start; // section is always last → deletion leaves the doc ending here
     } else {
       const content = doc.body?.content || [];
@@ -329,6 +328,20 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     };
   }
 
+  // Docs forbids deleting the body's final newline, but a named-range span CAN
+  // reach it (Google adjusts ranges when the user hand-edits the doc). Build
+  // every range deletion through this: clamp the end to just before the
+  // segment's final newline, and skip the content delete entirely when the
+  // clamped range is empty (span covered only that newline).
+  function deleteRangeReqs(doc, name, span) {
+    const content = doc.body?.content || [];
+    const segEnd = content[content.length - 1]?.endIndex || 2;
+    const end = Math.min(span.end, segEnd - 1);
+    const reqs = [{ deleteNamedRange: { name } }];
+    if (end > span.start) reqs.push({ deleteContentRange: { range: r(span.start, end) } });
+    return reqs;
+  }
+
   async function upsertEntry(entry) {
     const tab = await ensureBucketDoc(entry.bucketId, entry.bucketName || "Bucket");
     const doc = await getDoc(tab.docId);
@@ -351,11 +364,10 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     try {
       if (existing) {
         // Replace the block in place (stays in its original date section).
-        const { start, end } = existing;
+        const { start } = existing;
         await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, {
           requests: [
-            { deleteNamedRange: { name: entry.id } },
-            { deleteContentRange: { range: r(start, end) } },
+            ...deleteRangeReqs(doc, entry.id, existing),
             { insertText: { location: { index: start }, text: block.text } },
             ...styleRequests(entry, block, start),
             ...imageReqs(start),
@@ -416,10 +428,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const span = rangeOf(doc, entryId);
     if (!span) return;
     await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, {
-      requests: [
-        { deleteNamedRange: { name: entryId } },
-        { deleteContentRange: { range: r(span.start, span.end) } },
-      ],
+      requests: deleteRangeReqs(doc, entryId, span),
     });
   }
 
@@ -435,8 +444,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
       const t = `${newName}\n`;
       await api("POST", `${DOCS}/documents/${tab.docId}:batchUpdate`, {
         requests: [
-          { deleteNamedRange: { name: TITLE_RANGE } },
-          { deleteContentRange: { range: r(span.start, span.end) } },
+          ...deleteRangeReqs(doc, TITLE_RANGE, span),
           { insertText: { location: { index: span.start }, text: t } },
           {
             updateParagraphStyle: {
