@@ -59,6 +59,18 @@ you meant to come back to.
       and exports, so key/value trackers stay structured. (Note: trackers are
       **not encrypted** — locally or in your Google Sheet — so avoid storing
       real passwords or secrets.)
+    - **AI tools (bring your own)** — a ✨ menu in the doc toolbar:
+      **Summarize doc** (appends a `## Summary`), **Flashcards → tracker**
+      (Q/A pairs land as a key/value Sheet bucket, synced like any tracker),
+      **Quiz me** (interactive multiple-choice overlay with explanations and a
+      score), and **Ask your notes** (chat over all your buckets with cited
+      sources; insert answers into the doc). Connect it **your way**: your own
+      **free Gemini API key** ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+      — most students have one) or a **local Ollama model**
+      ([ollama.com](https://ollama.com), start it with
+      `OLLAMA_ORIGINS=chrome-extension://*`) for fully-offline privacy. Keys
+      stay on your device; requests go straight to your chosen provider, never
+      through any middleman — see [docs/PRIVACY.md](docs/PRIVACY.md).
     - **Voice input** — a 🎙 mic button in the doc bottom bar dictates notes in
       **your language** (~100 supported; picker beside the mic, remembered).
       Uses the browser's **free built-in speech recognition** — no account, no

@@ -59,16 +59,14 @@ AI chat with citations, auto-structured notes. We can match the useful subset wi
 running servers by letting users **bring their own API key** (stored locally, calls go
 direct from the extension to the provider) — or gate behind the roadmap's paywall later.
 
-7. **One-click video/page summary** → appended to the doc (transcript/article text →
-   summary with timestamp citations).
-8. **Flashcards from a doc** — generate Q/A pairs from a bucket's content; store as a
-   Sheet bucket (key = question, data = answer — our key/value column fits perfectly);
-   a simple review mode in the panel later.
-9. **Quiz me** — same generation path, interactive in the panel.
+7. ✅ **One-click video/page summary** — shipped: ✨ → Summarize doc (appends `## Summary`).
+8. ✅ **Flashcards from a doc** — shipped: ✨ → Flashcards → key/value tracker
+   (key = question, data = answer); review mode still open.
+9. ✅ **Quiz me** — shipped: ✨ → Quiz me (MCQ overlay with explanations + score).
 10. **Concept diagrams** — generate Mermaid from a doc's content; render in preview
     (markdown-native, no proprietary canvas needed).
-11. **Ask your notes** — chat over local buckets with citations (retrieval over
-    IndexedDB content; embeddings optional at our scale).
+11. ✅ **Ask your notes** — shipped: ✨ → Ask your notes (keyword retrieval over all
+    buckets, cited answers, insert-into-doc). Embeddings still optional later.
 12. **Auto-structured notes** — turn a raw transcript capture into
     headings/bullets (H1/H2/list formats already exist end-to-end).
 
