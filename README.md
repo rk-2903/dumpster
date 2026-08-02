@@ -229,6 +229,10 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 
 ## Roadmap (Phase 2)
 
+- **Study-flow gaps vs. LunaNotes** — live timestamped video notes with
+  click-to-seek, transcript drawer, screenshot annotation, global search, and
+  optional BYO-key AI (summaries/flashcards/diagrams): see the full analysis in
+  [docs/IDEAS-LUNANOTES-GAPS.md](docs/IDEAS-LUNANOTES-GAPS.md).
 - **UI localization** — translate the extension's own labels/buttons via
   `chrome.i18n` + `_locales` (voice dictation already works in ~100 languages).
 - **Offline / on-device dictation** — Chrome's on-device speech recognition (or
