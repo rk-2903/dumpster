@@ -140,13 +140,14 @@ Data lives in the browser (IndexedDB + `chrome.storage.local`, with persistent
 storage requested so it isn't evicted). Your **content** never leaves your
 machine unless you connect Google — and then it goes only to your own Drive.
 
-- **Anonymous usage stats (opt-out)** — to see how many people use IvyNotes and
-  which features matter, it sends **anonymous** event counts (a random id,
-  event names like `install`/`active`/`feature`/`error`, version, locale) to the
-  developer's Supabase backend. Never your dumps, selections, screenshots, page
-  URLs, or Google data. Opt-out — see [docs/PRIVACY.md](docs/PRIVACY.md) for
-  exactly what's collected and how to disable it. The backend (schema + edge
-  functions you self-host) lives in [`supabase/`](supabase/).
+- **Anonymous usage stats** — to see how many people use IvyNotes and which
+  features matter, it sends **anonymous** event counts (a random id, event names
+  like `install`/`active`/`feature`/`error`, version, locale) to the developer's
+  Supabase backend. Never your dumps, selections, screenshots, page URLs, or
+  Google data. There is no in-product on/off setting yet (one is on the
+  roadmap); uninstalling stops it. See [docs/PRIVACY.md](docs/PRIVACY.md) for
+  exactly what's collected. The backend (schema + edge functions you self-host)
+  lives in [`supabase/`](supabase/).
 
 ## Install (unpacked, for development)
 
@@ -168,7 +169,7 @@ Reload the extension from that page after any code change.
 | `src/outbox.js` | Durable, coalescing sync op queue (no-ops while disconnected) |
 | `src/sync.js` | Sync orchestrator — routes ops to the provider matching each bucket's kind |
 | `src/googleAuth.js` | `chrome.identity` connect/disconnect/token wrapper |
-| `src/telemetry.js` | Anonymous, opt-out usage telemetry (durable batched sender) |
+| `src/telemetry.js` | Anonymous usage telemetry (durable batched sender) |
 | `src/sheetsSync.js` | Sheets provider — tab per bucket, row per dump keyed by entry id |
 | `src/docsSync.js` | Docs provider — doc per bucket, date headings, named-range keyed blocks |
 | `src/markdown.js` | Tiny markdown → HTML renderer (panel preview + exports) |
@@ -309,6 +310,9 @@ Everything needed to ship IvyNotes to the Chrome Web Store:
   (flip, spaced repetition) instead of reading it as a table.
 - **Committed test suite** — the jsdom/Node suites currently live outside the
   repo and get wiped; move them to `tests/` with an `npm test` script.
+- **Telemetry on/off setting** — restore the visible toggle that was dropped in
+  the UI revamp, so the anonymous stats can be turned off without uninstalling
+  (`telemetryEnabled` already gates everything in `src/telemetry.js`).
 - **UI localization** — translate the extension's own labels/buttons via
   `chrome.i18n` + `_locales` (voice dictation already works in ~100 languages).
 - **Offline / on-device dictation** — Chrome's on-device speech recognition (or
