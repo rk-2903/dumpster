@@ -70,7 +70,7 @@ export async function processOps(ops, { providers, getEntry: getEntryFn, nameByI
       }
       done.push(op.opId);
     } catch (err) {
-      console.warn("[dumpster] sync op failed:", op.kind, err.message);
+      console.warn("[ivynotes] sync op failed:", op.kind, err.message);
       failed = true;
       error = err.message;
       break; // preserve order; retry later
@@ -127,7 +127,7 @@ export async function drain() {
     await setSyncState(failed ? "error" : "synced", failed ? error : "");
     await runOcrPass(ops, done, providers, kindById);
   } catch (err) {
-    console.warn("[dumpster] drain failed:", err.message);
+    console.warn("[ivynotes] drain failed:", err.message);
     await setSyncState("error", err.message);
     track("error", { code: "sync" }); // anonymous, no detail — just a count
   } finally {

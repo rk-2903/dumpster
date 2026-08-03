@@ -15,11 +15,12 @@
 
 import { getBuckets, ensureSeeded, addBucket, getLastBucketId, setLastBucketId, signalDump } from "./src/buckets.js";
 import { addEntry, makeEntry, putImage, getImage, getEntriesByBucket, updateEntry, deleteEntry, STATUSES, EXPORT_COLS } from "./src/db.js";
-import { enqueueUpsert, enqueueDelete } from "./src/outbox.js";
+import { enqueueUpsert, enqueueUpsertMany, enqueueDelete } from "./src/outbox.js";
 import { captureVisible, cropBlob } from "./src/capture.js";
 import { regionSelectOverlay } from "./src/regionSelect.js";
 import { ytGrabTranscript } from "./src/ytTranscript.js";
 import { createVoiceInput, voiceSupported } from "./src/voiceInput.js";
+import { getAi, setAi, aiReady, testAi, aiComplete, checkOllamaUrl } from "./src/ai.js";
 import { getToken, getConnection } from "./src/googleAuth.js";
 import { createDocsProvider } from "./src/docsSync.js";
 import { track, pingActive, flush } from "./src/telemetry.js";
@@ -44,6 +45,42 @@ const els = {
   capOcr: document.getElementById("cap-ocr"),
   capTs: document.getElementById("cap-ts"),
   capTsMenu: document.getElementById("cap-ts-menu"),
+  aiBtn: document.getElementById("ai-btn"),
+  aiMenu: document.getElementById("ai-menu"),
+  aiSummarize: document.getElementById("ai-summarize"),
+  aiFlashcards: document.getElementById("ai-flashcards"),
+  aiQuiz: document.getElementById("ai-quiz"),
+  aiAsk: document.getElementById("ai-ask"),
+  aiSetup: document.getElementById("ai-setup"),
+  aiBackdrop: document.getElementById("ai-backdrop"),
+  aiGeminiFields: document.getElementById("ai-gemini-fields"),
+  aiOllamaFields: document.getElementById("ai-ollama-fields"),
+  aiGeminiKey: document.getElementById("ai-gemini-key"),
+  aiGeminiModel: document.getElementById("ai-gemini-model"),
+  aiOllamaUrl: document.getElementById("ai-ollama-url"),
+  aiOllamaModel: document.getElementById("ai-ollama-model"),
+  aiOllamaModels: document.getElementById("ai-ollama-models"),
+  aiOpenaiFields: document.getElementById("ai-openai-fields"),
+  aiOpenaiKey: document.getElementById("ai-openai-key"),
+  aiOpenaiModel: document.getElementById("ai-openai-model"),
+  aiAnthropicFields: document.getElementById("ai-anthropic-fields"),
+  aiAnthropicKey: document.getElementById("ai-anthropic-key"),
+  aiAnthropicModel: document.getElementById("ai-anthropic-model"),
+  aiStatus: document.getElementById("ai-status"),
+  aiTest: document.getElementById("ai-test"),
+  aiSave: document.getElementById("ai-save"),
+  quizBackdrop: document.getElementById("quiz-backdrop"),
+  quizProgress: document.getElementById("quiz-progress"),
+  quizClose: document.getElementById("quiz-close"),
+  quizQ: document.getElementById("quiz-q"),
+  quizOpts: document.getElementById("quiz-opts"),
+  quizWhy: document.getElementById("quiz-why"),
+  quizNext: document.getElementById("quiz-next"),
+  askBackdrop: document.getElementById("ask-backdrop"),
+  askClose: document.getElementById("ask-close"),
+  askMsgs: document.getElementById("ask-msgs"),
+  askInput: document.getElementById("ask-input"),
+  askSend: document.getElementById("ask-send"),
   voiceBtn: document.getElementById("voice-btn"),
   voiceLang: document.getElementById("voice-lang"),
   voiceMenu: document.getElementById("voice-menu"),
@@ -188,8 +225,10 @@ async function init() {
     els.sheetExportMenu.hidden = true;
     els.capTsMenu.hidden = true;
     els.voiceMenu.hidden = true;
+    els.aiMenu.hidden = true;
   });
   setupVoice();
+  setupAi();
   els.exportPdf.addEventListener("click", onExportPdf);
   els.exportDocx.addEventListener("click", onExportDocx);
   els.exportMd.addEventListener("click", onExportMd);
@@ -255,7 +294,7 @@ function setupCloudChip() {
     chrome.storage.local.get(["gconnection", "syncState"], (o) => apply(o.gconnection, o.syncState));
   });
   els.cloudOpen.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("dumpster.html#cloud") });
+    chrome.tabs.create({ url: chrome.runtime.getURL("workspace.html#cloud") });
   });
 }
 
@@ -800,7 +839,7 @@ async function onRegionCapture(kind) {
     await saveEntry({ content: "", blob: crop }); // image only, no caption
     showToast("Screenshot added");
   } catch (err) {
-    console.warn(`[dumpster] panel capture failed at "${stage}":`, err);
+    console.warn(`[ivynotes] panel capture failed at "${stage}":`, err);
     const detail = String(err?.message || err).slice(0, 110);
     showToast(
       access === "declined"
@@ -1003,6 +1042,505 @@ function insertDictation(text) {
   }
 }
 
+// ---- AI tools: summarize / flashcards / quiz / ask (BYO Gemini or Ollama) ----
+// The provider layer lives in src/ai.js: the user's own free Gemini key or a
+// local Ollama model — chosen in the settings modal, nothing via our servers.
+
+let aiDraft = null; // settings being edited in the modal
+let quizState = null; // { qs: [{q, options, answer, why}], i, score }
+let askBusy = false; // one question in flight at a time
+const askHistory = []; // rolling {role, text} for follow-up questions
+
+const AI_INPUT_CAP = 28000; // chars of doc text per request (fits free tiers)
+const clipDoc = (t) => (t.length > AI_INPUT_CAP ? t.slice(0, AI_INPUT_CAP) : t);
+
+function setupAi() {
+  els.aiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.exportMenu.hidden = true;
+    els.capTsMenu.hidden = true;
+    els.voiceMenu.hidden = true;
+    els.aiMenu.hidden = !els.aiMenu.hidden;
+  });
+  const item = (el, fn) =>
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      els.aiMenu.hidden = true;
+      fn();
+    });
+  item(els.aiSummarize, onAiSummarize);
+  item(els.aiFlashcards, onAiFlashcards);
+  item(els.aiQuiz, onAiQuiz);
+  item(els.aiAsk, onAiAsk);
+  item(els.aiSetup, openAiSettings);
+
+  // Settings modal
+  for (const b of els.aiBackdrop.querySelectorAll(".ai-prov")) {
+    b.addEventListener("click", () => {
+      readAiDraft();
+      aiDraft.provider = b.dataset.prov;
+      renderAiSettings();
+    });
+  }
+  els.aiTest.addEventListener("click", onAiTest);
+  els.aiSave.addEventListener("click", onAiSave);
+  els.aiBackdrop.addEventListener("click", (e) => {
+    if (e.target === els.aiBackdrop) els.aiBackdrop.hidden = true;
+  });
+
+  // Quiz
+  els.quizClose.addEventListener("click", () => (els.quizBackdrop.hidden = true));
+  els.quizNext.addEventListener("click", () => {
+    quizState.i++;
+    renderQuizStep();
+  });
+
+  // Ask
+  els.askClose.addEventListener("click", () => (els.askBackdrop.hidden = true));
+  els.askSend.addEventListener("click", onAskSend);
+  els.askInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onAskSend();
+    }
+  });
+}
+
+async function requireAi() {
+  const s = await getAi();
+  if (aiReady(s)) return s;
+  showToast("Set up AI first — your own Gemini key, or local Ollama", true);
+  openAiSettings(); // closes the quiz/ask overlays so settings isn't buried
+  return null;
+}
+
+function setAiBusy(b) {
+  els.aiBtn.classList.toggle("busy", b);
+  for (const el of [els.aiSummarize, els.aiFlashcards, els.aiQuiz, els.aiAsk]) el.disabled = b;
+}
+
+// Append markdown at the end of the doc. Must switch to Write first: the
+// editor is display:none in Preview (the default mode), so focus() is a no-op
+// and execCommand would type into whatever else holds the selection — e.g. the
+// Ask box the user just typed into. Then persist and re-render explicitly
+// rather than relying on the autosave debounce.
+async function appendToDoc(md) {
+  const bucketId = activeBucket;
+  const wasPreview = mode === "preview";
+  setMode("write");
+  const v = els.editor.value;
+  const glue = !v ? "" : /\n$/.test(v) ? "\n" : "\n\n";
+  const ins = glue + md.trim() + "\n";
+  replaceRange(v.length, v.length, ins, v.length + ins.length, v.length + ins.length);
+  clearTimeout(saveTimer);
+  await setBody(bucketId, els.editor.value);
+  els.saveState.textContent = "Saved";
+  if (wasPreview) setMode("preview"); // renders the fresh body
+}
+
+// -- settings modal --
+
+async function openAiSettings() {
+  els.quizBackdrop.hidden = true;
+  els.askBackdrop.hidden = true;
+  aiDraft = await getAi();
+  if (!aiDraft.provider) aiDraft.provider = "gemini";
+  renderAiSettings();
+  els.aiBackdrop.hidden = false;
+}
+
+function renderAiSettings() {
+  const s = aiDraft;
+  for (const b of els.aiBackdrop.querySelectorAll(".ai-prov")) {
+    b.classList.toggle("sel", b.dataset.prov === s.provider);
+  }
+  els.aiGeminiFields.hidden = s.provider !== "gemini";
+  els.aiOllamaFields.hidden = s.provider !== "ollama";
+  els.aiOpenaiFields.hidden = s.provider !== "openai";
+  els.aiAnthropicFields.hidden = s.provider !== "anthropic";
+  els.aiGeminiKey.value = s.geminiKey;
+  els.aiGeminiModel.value = s.geminiModel;
+  els.aiOllamaUrl.value = s.ollamaUrl;
+  els.aiOllamaModel.value = s.ollamaModel;
+  els.aiOpenaiKey.value = s.openaiKey;
+  els.aiOpenaiModel.value = s.openaiModel;
+  els.aiAnthropicKey.value = s.anthropicKey;
+  els.aiAnthropicModel.value = s.anthropicModel;
+  aiStatus("");
+}
+
+function readAiDraft() {
+  aiDraft.geminiKey = els.aiGeminiKey.value.trim();
+  aiDraft.geminiModel = els.aiGeminiModel.value.trim() || "gemini-2.5-flash";
+  aiDraft.ollamaUrl = els.aiOllamaUrl.value.trim() || "http://localhost:11434";
+  aiDraft.ollamaModel = els.aiOllamaModel.value.trim();
+  aiDraft.openaiKey = els.aiOpenaiKey.value.trim();
+  aiDraft.openaiModel = els.aiOpenaiModel.value.trim() || "gpt-4o-mini";
+  aiDraft.anthropicKey = els.aiAnthropicKey.value.trim();
+  aiDraft.anthropicModel = els.aiAnthropicModel.value.trim() || "claude-sonnet-5";
+}
+
+function aiStatus(msg, ok = false) {
+  els.aiStatus.textContent = msg;
+  els.aiStatus.classList.toggle("ok", ok);
+  els.aiStatus.hidden = !msg;
+}
+
+async function onAiTest() {
+  readAiDraft();
+  aiStatus("Testing…", true);
+  const r = await testAi(aiDraft);
+  if (r.models) {
+    els.aiOllamaModels.innerHTML = "";
+    for (const m of r.models) {
+      const opt = document.createElement("option");
+      opt.value = m;
+      els.aiOllamaModels.appendChild(opt);
+    }
+    if (!aiDraft.ollamaModel && r.models.length) {
+      aiDraft.ollamaModel = r.models[0];
+      els.aiOllamaModel.value = r.models[0];
+    }
+  }
+  aiStatus(r.ok ? "Connected" : r.error, r.ok);
+}
+
+async function onAiSave() {
+  readAiDraft();
+  const ORIGINS = {
+    gemini: "https://generativelanguage.googleapis.com/*",
+    openai: "https://api.openai.com/*",
+    anthropic: "https://api.anthropic.com/*",
+  };
+  let origin = ORIGINS[aiDraft.provider] || "https://generativelanguage.googleapis.com/*";
+  if (aiDraft.provider === "ollama") {
+    // Refuse non-local hosts: sending notes to someone else's "Ollama" would
+    // quietly break the promise this feature makes.
+    const check = checkOllamaUrl(aiDraft.ollamaUrl);
+    if (!check.ok) return aiStatus(check.error);
+    aiDraft.ollamaUrl = check.url;
+    els.aiOllamaUrl.value = check.url;
+    origin = check.originPattern;
+  }
+  if (!aiReady(aiDraft)) {
+    const NEEDS = {
+      gemini: "Paste your Gemini API key first",
+      ollama: "Set the Ollama URL and a model (Test lists what's installed)",
+      openai: "Paste your OpenAI API key first",
+      anthropic: "Paste your Anthropic API key first",
+    };
+    aiStatus(NEEDS[aiDraft.provider] || "Pick a provider first");
+    return;
+  }
+  await setAi(aiDraft);
+  // A host grant makes the cross-origin call reliable; the one-time <all_urls>
+  // capture grant usually covers it already, so this prompts rarely. Requested
+  // straight off the click while the activation is fresh; failures are
+  // non-fatal (plain CORS works for Gemini and for a correctly-configured
+  // Ollama), so we only log them.
+  try {
+    if (!(await chrome.permissions.contains({ origins: [origin] }))) {
+      await chrome.permissions.request({ origins: [origin] });
+    }
+  } catch (err) {
+    console.warn("[ivynotes] AI host permission not granted:", err);
+  }
+  els.aiBackdrop.hidden = true;
+  const MODEL_OF = {
+    gemini: aiDraft.geminiModel,
+    ollama: aiDraft.ollamaModel,
+    openai: aiDraft.openaiModel,
+    anthropic: aiDraft.anthropicModel,
+  };
+  showToast(`AI ready — ${MODEL_OF[aiDraft.provider]}`);
+  track("feature", { name: "ai-setup" });
+}
+
+// -- 7: summarize the doc --
+
+async function onAiSummarize() {
+  if (!(await requireAi())) return;
+  const text = els.editor.value.trim();
+  if (!text) return showToast("This doc is empty — capture something first", true);
+  const startedIn = activeBucket; // don't write a summary into a doc switched to mid-flight
+  setAiBusy(true);
+  try {
+    const out = await aiComplete({
+      system: "You are a study assistant. Be concise and factual. Answer in clean markdown.",
+      prompt:
+        "Summarize these study notes as short bullet points grouped under bold topic lines, " +
+        "ending with a **Key takeaways** list. Keep any [m:ss] timestamps beside the points " +
+        `they support. Reply with the summary only.\n\nNOTES:\n${clipDoc(text)}`,
+    });
+    if (activeBucket !== startedIn) return showToast("You switched docs — summary discarded", true);
+    await appendToDoc(`## Summary\n\n${out}`);
+    showToast("Summary added to the doc");
+    track("feature", { name: "ai-summary" });
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+// -- 8: flashcards → a key/value tracker (key = question, data = answer) --
+
+async function onAiFlashcards() {
+  if (!(await requireAi())) return;
+  const text = els.editor.value.trim();
+  if (!text) return showToast("This doc is empty — capture something first", true);
+  const startedIn = activeBucket;
+  const docName = (await getBuckets()).find((b) => b.id === startedIn)?.name || "Doc";
+  setAiBusy(true);
+  try {
+    const data = await aiComplete({
+      json: true,
+      system: "You create study flashcards. Reply with JSON only.",
+      prompt:
+        "Create 8-14 flashcards from these notes. Questions short and specific; answers 1-2 " +
+        'sentences. Return ONLY this JSON shape: {"cards":[{"q":"question","a":"answer"}]}' +
+        `\n\nNOTES:\n${clipDoc(text)}`,
+    });
+    const cards = (Array.isArray(data) ? data : data?.cards || [])
+      .filter((c) => c && typeof c.q === "string" && typeof c.a === "string" && c.q.trim() && c.a.trim())
+      .slice(0, 20);
+    if (!cards.length) throw new Error("No usable flashcards came back — try again");
+
+    const name = `${docName} Flashcards`;
+    const bucket =
+      (await getBuckets()).find((b) => b.kind === "sheet" && b.name === name) ||
+      (await addBucket(name, "sheet"));
+    const created = [];
+    for (const c of cards) {
+      const entry = makeEntry({ bucketId: bucket.id, content: c.a.trim(), sourceUrl: "", sourceTitle: docName });
+      entry.key = c.q.trim();
+      await addEntry(entry);
+      created.push(entry.id);
+    }
+    await enqueueUpsertMany(created);
+    await signalDump();
+    activeSheet = bucket.id;
+    setKind("sheet"); // shows the fresh tracker immediately
+    showToast(`${cards.length} flashcards → "${bucket.name}"`);
+    track("feature", { name: "ai-flashcards" });
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+// -- 9: quiz me --
+
+async function onAiQuiz() {
+  if (!(await requireAi())) return;
+  const text = els.editor.value.trim();
+  if (!text) return showToast("This doc is empty — capture something first", true);
+  setAiBusy(true);
+  try {
+    const data = await aiComplete({
+      json: true,
+      system: "You write multiple-choice quizzes. Reply with JSON only.",
+      prompt:
+        "Write a 6-question multiple-choice quiz from these notes. Each question has exactly 4 " +
+        'options, one correct. Return ONLY this JSON shape: {"questions":[{"q":"…","options":' +
+        '["…","…","…","…"],"answer":0,"why":"one-line explanation"}]} where answer is the ' +
+        `0-based index of the correct option.\n\nNOTES:\n${clipDoc(text)}`,
+    });
+    const qs = (Array.isArray(data) ? data : data?.questions || [])
+      .filter(
+        (q) =>
+          q &&
+          typeof q.q === "string" &&
+          Array.isArray(q.options) &&
+          q.options.length >= 2 &&
+          Number.isInteger(q.answer) &&
+          q.answer >= 0 &&
+          q.answer < q.options.length
+      )
+      .slice(0, 10);
+    if (!qs.length) throw new Error("No usable quiz came back — try again");
+    quizState = { qs, i: 0, score: 0 };
+    els.quizBackdrop.hidden = false;
+    renderQuizStep();
+    track("feature", { name: "ai-quiz" });
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+function renderQuizStep() {
+  const { qs, i, score } = quizState;
+  els.quizWhy.hidden = true;
+  els.quizNext.hidden = true;
+  els.quizOpts.innerHTML = "";
+  if (i >= qs.length) {
+    els.quizProgress.textContent = "";
+    els.quizQ.textContent = `You scored ${score} / ${qs.length}${score === qs.length ? " — perfect!" : ""}`;
+    return;
+  }
+  const q = qs[i];
+  els.quizProgress.textContent = `${i + 1} / ${qs.length}`;
+  els.quizQ.textContent = q.q;
+  q.options.forEach((opt, idx) => {
+    const b = document.createElement("button");
+    b.className = "quiz-opt";
+    b.textContent = opt;
+    b.addEventListener("click", () => {
+      if (els.quizNext.hidden === false) return; // already answered
+      for (const [j, el] of [...els.quizOpts.children].entries()) {
+        el.disabled = true;
+        if (j === q.answer) el.classList.add("correct");
+      }
+      if (idx === q.answer) quizState.score++;
+      else b.classList.add("wrong");
+      if (q.why) {
+        els.quizWhy.textContent = q.why;
+        els.quizWhy.hidden = false;
+      }
+      els.quizNext.textContent = i === qs.length - 1 ? "See score" : "Next";
+      els.quizNext.hidden = false;
+    });
+    els.quizOpts.appendChild(b);
+  });
+}
+
+// -- 11: ask your notes (retrieval over local buckets, cited answers) --
+
+function onAiAsk() {
+  els.askBackdrop.hidden = false;
+  els.askInput.focus();
+}
+
+function addAskMsg(kind, text) {
+  const div = document.createElement("div");
+  div.className = kind === "q" ? "ask-q" : "ask-a";
+  div.textContent = text;
+  els.askMsgs.appendChild(div);
+  els.askMsgs.scrollTop = els.askMsgs.scrollHeight;
+  return div;
+}
+
+// Cheap local retrieval: split every bucket into small chunks, rank by
+// keyword overlap with the question, stuff the best into the prompt. At
+// panel scale this beats shipping an embedding model.
+async function buildAskContext(question) {
+  const buckets = await getBuckets();
+  const chunks = [];
+  for (const b of buckets) {
+    if (b.kind === "doc") {
+      // The doc body already contains every captured entry — indexing the
+      // entries too would duplicate the same text and halve the context.
+      const body = (await getBody(b.id)) || "";
+      for (const part of body.split(/\n\n+/)) {
+        const t = part.trim();
+        if (t) chunks.push({ bucket: b.name, text: t.slice(0, 700) });
+      }
+      continue;
+    }
+    for (const e of await getEntriesByBucket(b.id)) {
+      const t = [e.key, e.content, e.notes].filter(Boolean).join(" — ").trim();
+      if (t) chunks.push({ bucket: b.name, text: t.slice(0, 400) });
+    }
+  }
+  const terms = question.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
+  const scoreOf = (c) => {
+    const lt = c.text.toLowerCase();
+    let s = 0;
+    for (const t of terms) if (lt.includes(t)) s++;
+    return s;
+  };
+  // Only send chunks that actually match the question. No fallback: shipping
+  // unrelated notes to the provider just because nothing matched would leak
+  // material the question never asked about.
+  const pool = chunks
+    .map((c) => ({ ...c, s: scoreOf(c) }))
+    .filter((c) => c.s > 0)
+    .sort((a, b) => b.s - a.s);
+  const picked = [];
+  let used = 0;
+  for (const c of pool) {
+    if (used + c.text.length > 9000) break;
+    used += c.text.length;
+    picked.push(c);
+    if (picked.length >= 24) break;
+  }
+  const names = [...new Set(picked.map((c) => c.bucket))];
+  return {
+    blocks: picked.map((c) => `[${names.indexOf(c.bucket) + 1}] ${c.text}`).join("\n\n"),
+    legend: names.map((n, i) => `[${i + 1}] ${n}`).join("\n"),
+  };
+}
+
+async function onAskSend() {
+  // Enter-to-send bypasses the disabled button, so gate on our own flag —
+  // otherwise a second question fires a concurrent call and the answers
+  // interleave (and burn double quota).
+  if (askBusy) return;
+  const q = els.askInput.value.trim();
+  if (!q) return;
+  askBusy = true; // claimed BEFORE any await — the storage hop in requireAi
+  // is long enough for a second Enter to slip through otherwise.
+  let started = false;
+  try {
+    if (!(await requireAi())) return;
+    started = true;
+  } finally {
+    if (!started) askBusy = false;
+  }
+  els.askInput.value = "";
+  addAskMsg("q", q);
+  const thinking = addAskMsg("a", "Thinking…");
+  thinking.classList.add("thinking");
+  els.askSend.disabled = true;
+  try {
+    const ctx = await buildAskContext(q);
+    const history = askHistory
+      .slice(-6)
+      .map((m) => `${m.role === "user" ? "Q" : "A"}: ${m.text}`)
+      .join("\n");
+    const out = await aiComplete({
+      system:
+        "You answer questions strictly from the user's own notes. Cite sources inline like [1]. " +
+        "If the notes don't contain the answer, say so plainly. Answer in short markdown.",
+      prompt:
+        `NOTES:\n${ctx.blocks || "(no notes yet)"}\n\nSOURCES:\n${ctx.legend || "(none)"}\n\n` +
+        (history ? `EARLIER IN THIS CHAT:\n${history}\n\n` : "") +
+        `QUESTION: ${q}`,
+    });
+    thinking.remove();
+    const a = addAskMsg("a", "");
+    // Model output is untrusted (notes can contain text captured from pages):
+    // block remote <img> so a reply can't beacon note content out on render.
+    a.innerHTML = renderMarkdown(out, { allowRemoteImages: false });
+    if (ctx.legend) {
+      const src = document.createElement("div");
+      src.className = "src";
+      src.textContent = ctx.legend.replace(/\n/g, "  ·  ");
+      a.appendChild(src);
+    }
+    const ins = document.createElement("button");
+    ins.className = "ask-insert";
+    ins.textContent = "Insert into doc";
+    ins.addEventListener("click", () => {
+      appendToDoc(`## Q: ${q}\n\n${out}`);
+      showToast("Answer added to the doc");
+    });
+    a.appendChild(ins);
+    askHistory.push({ role: "user", text: q }, { role: "assistant", text: out });
+    els.askMsgs.scrollTop = els.askMsgs.scrollHeight;
+    track("feature", { name: "ai-ask" });
+  } catch (err) {
+    thinking.classList.remove("thinking");
+    thinking.textContent = err.message;
+  } finally {
+    askBusy = false;
+    els.askSend.disabled = false;
+  }
+}
+
 // ---- Export: PDF / Markdown (doc) and Excel (tracker) ----
 // Screenshots live permanently in IndexedDB, so exports embed them straight
 // from local storage — no cloud round-trip, works offline and unsynced.
@@ -1019,10 +1557,10 @@ function download(filename, mime, data) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-const safeName = (s) => (s || "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "dumpster";
+const safeName = (s) => (s || "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "ivynotes";
 
 async function bucketName(id) {
-  return (await getBuckets()).find((b) => b.id === id)?.name || "Dumpster";
+  return (await getBuckets()).find((b) => b.id === id)?.name || "IvyNotes";
 }
 
 async function onExportPdf() {
@@ -1201,7 +1739,7 @@ async function onExportGo() {
   const buckets = (await getBuckets()).filter((b) => ids.includes(b.id));
   const data = [];
   for (const b of buckets) data.push({ name: b.name, rows: await exportRows(b.id) });
-  const stem = data.length === 1 ? safeName(data[0].name) : "dumpster-trackers";
+  const stem = data.length === 1 ? safeName(data[0].name) : "ivynotes-trackers";
 
   if (pickFormat === "json") {
     const obj = {};

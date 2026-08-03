@@ -1,8 +1,12 @@
-# Dumpster
+# IvyNotes
 
-A Chrome extension for quick-dumping links, snippets, and notes into **buckets**.
-Local-first, append-forever. Built to stop losing the job link / profile / snippet
-you meant to come back to.
+**Keep what you're learning: capture from any page, dictate in multiple
+languages, and study with AI — summarize, quiz, and flashcards — right in your
+sidebar.**
+
+A Chrome extension that turns the browser sidebar into a notebook. Everything is
+**local-first** and append-forever, with optional sync to **your own** Google
+Docs and Sheets — no account, no server of ours in the middle.
 
 ## What it does
 
@@ -56,9 +60,24 @@ you meant to come back to.
       tracker are remembered. Each add has two fields: an optional **Key**
       (a label like `username` or `id`) above the **Data** — they land in
       **separate columns** in the workspace table, the synced Google Sheet,
-      and exports, so key/value trackers stay structured. (Note: trackers are
-      **not encrypted** — locally or in your Google Sheet — so avoid storing
-      real passwords or secrets.)
+      and exports, so key/value trackers stay structured. Every row also has
+      a **copy** button (copies the value only — never the key, source or
+      status) and a **delete** ✕ that arms into a red *Delete?* needing a
+      second click, removing the row locally **and** from the synced sheet.
+      (Note: trackers are **not encrypted** — locally or in your Google Sheet
+      — so avoid storing real passwords or secrets.)
+    - **AI tools (bring your own)** — a ✨ menu in the doc toolbar:
+      **Summarize doc** (appends a `## Summary`), **Flashcards → tracker**
+      (Q/A pairs land as a key/value Sheet bucket, synced like any tracker),
+      **Quiz me** (interactive multiple-choice overlay with explanations and a
+      score), and **Ask your notes** (chat over all your buckets with cited
+      sources; insert answers into the doc). Connect it **your way** — four
+      options, set up in ✨ → *AI settings…*: **Gemini** (a **free** key —
+      most students have one), **Ollama** (a model on your **own machine**),
+      **OpenAI**, or **Anthropic**. Keys stay on your device; requests go
+      straight to the provider you picked, never through any middleman, and
+      Ollama hosts must be local. See [AI setup](#ai-setup-bring-your-own)
+      below and [docs/PRIVACY.md](docs/PRIVACY.md).
     - **Voice input** — a 🎙 mic button in the doc bottom bar dictates notes in
       **your language** (~100 supported; picker beside the mic, remembered).
       Uses the browser's **free built-in speech recognition** — no account, no
@@ -106,7 +125,7 @@ you meant to come back to.
   text is editable later (double-click), links are clickable, and each bucket
   has a live **filter**.
 - **Live refresh** — dumps made from the popup or right-click appear instantly
-  in an open Dumpster tab.
+  in an open IvyNotes tab.
 - **Export** — pick any buckets (the one you're viewing is pre-selected, or
   choose All) and export to **Excel** (one sheet per bucket) or **JSON** (each
   bucket a key holding its dumps).
@@ -121,20 +140,21 @@ Data lives in the browser (IndexedDB + `chrome.storage.local`, with persistent
 storage requested so it isn't evicted). Your **content** never leaves your
 machine unless you connect Google — and then it goes only to your own Drive.
 
-- **Anonymous usage stats (opt-out)** — to see how many people use Dumpster and
-  which features matter, it sends **anonymous** event counts (a random id,
-  event names like `install`/`active`/`feature`/`error`, version, locale) to the
-  developer's Supabase backend. Never your dumps, selections, screenshots, page
-  URLs, or Google data. Opt-out — see [docs/PRIVACY.md](docs/PRIVACY.md) for
-  exactly what's collected and how to disable it. The backend (schema + edge
-  functions you self-host) lives in [`supabase/`](supabase/).
+- **Anonymous usage stats** — to see how many people use IvyNotes and which
+  features matter, it sends **anonymous** event counts (a random id, event names
+  like `install`/`active`/`feature`/`error`, version, locale) to the developer's
+  Supabase backend. Never your dumps, selections, screenshots, page URLs, or
+  Google data. There is no in-product on/off setting yet (one is on the
+  roadmap); uninstalling stops it. See [docs/PRIVACY.md](docs/PRIVACY.md) for
+  exactly what's collected. The backend (schema + edge functions you self-host)
+  lives in [`supabase/`](supabase/).
 
 ## Install (unpacked, for development)
 
 1. Open `chrome://extensions`.
 2. Toggle **Developer mode** (top-right).
-3. Click **Load unpacked** and select this `dumpster/` folder.
-4. Pin the Dumpster icon from the toolbar puzzle menu.
+3. Click **Load unpacked** and select this project folder.
+4. Pin the IvyNotes icon from the toolbar puzzle menu.
 
 Reload the extension from that page after any code change.
 
@@ -149,18 +169,22 @@ Reload the extension from that page after any code change.
 | `src/outbox.js` | Durable, coalescing sync op queue (no-ops while disconnected) |
 | `src/sync.js` | Sync orchestrator — routes ops to the provider matching each bucket's kind |
 | `src/googleAuth.js` | `chrome.identity` connect/disconnect/token wrapper |
-| `src/telemetry.js` | Anonymous, opt-out usage telemetry (durable batched sender) |
+| `src/telemetry.js` | Anonymous usage telemetry (durable batched sender) |
 | `src/sheetsSync.js` | Sheets provider — tab per bucket, row per dump keyed by entry id |
 | `src/docsSync.js` | Docs provider — doc per bucket, date headings, named-range keyed blocks |
 | `src/markdown.js` | Tiny markdown → HTML renderer (panel preview + exports) |
 | `src/docBody.js` | Per-bucket free-form markdown body (seed, ingest, autosave) |
+| `src/ai.js` | Bring-your-own AI layer — Gemini / Ollama / OpenAI / Anthropic, one `aiComplete()` |
+| `src/voiceInput.js` | Dictation wrapper over the browser's speech recognition (~100 languages) |
 | `src/capture.js` | captureVisibleTab → blob + region crop helpers |
 | `src/regionSelect.js` | Injected drag-a-region overlay |
+| `src/ytTranscript.js` | Injected YouTube transcript scraper (last 30s/60s/full) |
 | `src/selectionMenu.js` | Injected page helper — selection pill + floating dock |
 | `sidepanel.html/.js` | Doc panel — markdown editor, Sheet tracker, exports, cloud chip |
 | `export.html/.js` | Print-styled page behind the doc panel's PDF export |
+| `micgrant.html/.js` | One-time microphone grant page (side panels can't show the prompt) |
 | `popup.html/.css/.js` | Quick dump popup (icon right-click → small window) |
-| `dumpster.html/.css/.js` | Full-page workspace: tabs, list/board, filter, import/export, Cloud modal |
+| `workspace.html/.css/.js` | Full-page workspace: tabs, list/board, filter, import/export, Cloud modal |
 | `newbucket.html/.js` | Fallback naming window for the context-menu New bucket flow |
 | `scripts/package.sh` | Builds the Chrome Web Store zip (`dist/`) |
 | `docs/` | Publishing guide + privacy policy draft |
@@ -168,12 +192,58 @@ Reload the extension from that page after any code change.
 | `vendor/` | SheetJS (lazy-loaded for Excel import/export) |
 | `icons/` | Generated PNG icons |
 
+## AI setup (bring your own)
+
+The ✨ menu (Summarize · Flashcards · Quiz · Ask your notes) is **off until you
+connect a provider**. Open ✨ → **AI settings…**, pick one, then **Test** →
+**Save**. Your key is stored only in `chrome.storage.local` on this device, and
+requests go straight from the extension to the provider you chose — there is no
+IvyNotes server in the path.
+
+| Provider | Cost | Get a key |
+|---|---|---|
+| **Gemini** | Free tier (what most students use) | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| **Ollama** | Free, runs on your machine, works offline | [ollama.com](https://ollama.com) — see below |
+| **OpenAI** | Pay-as-you-go | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| **Anthropic** | Pay-as-you-go | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+
+### Ollama: allow the extension
+
+Ollama rejects browser-extension requests unless its origin allow-list includes
+them, so pull a model and start the server with `OLLAMA_ORIGINS` set:
+
+```bash
+ollama pull llama3.2
+```
+
+**A server that is already running will not pick the setting up** — it has to be
+restarted with the variable in its environment. On macOS the menu-bar app often
+ignores `launchctl setenv`, so the reliable route is to quit it and run the
+server yourself (keep this terminal open):
+
+```bash
+osascript -e 'quit app "Ollama"'; sleep 2; OLLAMA_ORIGINS='chrome-extension://*' ollama serve
+```
+
+To verify from a terminal, send the request shape the extension actually uses —
+**with an `Origin` header**, since a request without one is allowed even when
+the extension is blocked, which makes plain `curl` look misleadingly healthy:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:11434/api/chat -H "Origin: chrome-extension://test" -H "Content-Type: application/json" -d '{"model":"llama3.2","stream":false,"messages":[{"role":"user","content":"hi"}]}'
+```
+
+`200` means the panel will work; `403` means Ollama is still blocking the
+extension. Only local addresses are accepted (`localhost`, `127.0.0.1`, LAN,
+`*.local`) — a remote host is refused so "nothing leaves your computer" stays
+true.
+
 ## Google sync
 
 Cloud sync mirrors your dumps into your **own** Google Drive. Both destinations
 are live at once, routed by each bucket's type:
 
-- **Sheet buckets** — tabs in one "Dumpster" spreadsheet (the default empty
+- **Sheet buckets** — tabs in one "IvyNotes" spreadsheet (the default empty
   "Sheet1" is cleaned up automatically), a row per dump keyed by entry id, so
   status changes, edits, and deletes update the same row.
 - **Doc buckets** — each bucket gets its own Google Doc (bucket name as the
@@ -187,7 +257,7 @@ are live at once, routed by each bucket's type:
   the document, then deleted (the local copy remains the source of truth).
 
 Connecting (an official-style **Connect Google** button in the Cloud modal)
-backfills everything already in Dumpster, oldest-first. The Cloud chip shows
+backfills everything already in IvyNotes, oldest-first. The Cloud chip shows
 live sync state (with error detail when something fails), and the modal links to
 the spreadsheet plus a collapsible list of each Doc bucket's doc. Local
 IndexedDB stays the source of truth; syncing is a background, non-blocking push
@@ -214,25 +284,37 @@ lighter brand verification, not the restricted-scope security assessment.
 
 ## Publishing
 
-Everything needed to ship Dumpster to the Chrome Web Store:
+Everything needed to ship IvyNotes to the Chrome Web Store:
 
 - **[docs/PUBLISHING.md](docs/PUBLISHING.md)** — the full step-by-step: developer
   account, packaging, the extension-ID / OAuth-client reconciliation (the one
   gotcha), consent-screen production, store listing + permission justifications,
   and how to release updates.
 - **`./scripts/package.sh`** — builds a clean store upload at
-  `dist/dumpster-v<version>.zip` (strips the dev-only manifest `"key"`, warns if
+  `dist/ivynotes-v<version>.zip` (strips the dev-only manifest `"key"`, warns if
   the OAuth client id is still the placeholder).
-- **[docs/PRIVACY.md](docs/PRIVACY.md)** — privacy policy draft. Deploy it to a
-  public URL (e.g. GitHub Pages) and fill in the date + contact email before
-  submitting the listing — the store requires the URL.
+- **Privacy policy** — published at
+  **<https://rk-2903.github.io/ivynotes/PRIVACY.html>** (GitHub Pages, served
+  from [`docs/`](docs/) on `main`); this is the URL the store listing links to.
+  The source lives in [docs/PRIVACY.md](docs/PRIVACY.md) — edit it there and the
+  page redeploys on the next push to `main`.
 
 ## Roadmap (Phase 2)
 
-- **Study-flow gaps vs. LunaNotes** — live timestamped video notes with
-  click-to-seek, transcript drawer, screenshot annotation, global search, and
-  optional BYO-key AI (summaries/flashcards/diagrams): see the full analysis in
+- **Study-flow gaps vs. LunaNotes** — still open: live timestamped video notes
+  with click-to-seek, a transcript drawer, screenshot annotation, and
+  cross-bucket global search. (Summaries, flashcards, quizzes and ask-your-notes
+  are **done** — see the AI tools above.) Full analysis in
   [docs/IDEAS-LUNANOTES-GAPS.md](docs/IDEAS-LUNANOTES-GAPS.md).
+- **Concept diagrams** — generate Mermaid from a doc and render it in the
+  preview (the remaining AI item from that analysis).
+- **Flashcard review mode** — study the generated Q/A tracker in the panel
+  (flip, spaced repetition) instead of reading it as a table.
+- **Committed test suite** — the jsdom/Node suites currently live outside the
+  repo and get wiped; move them to `tests/` with an `npm test` script.
+- **Telemetry on/off setting** — restore the visible toggle that was dropped in
+  the UI revamp, so the anonymous stats can be turned off without uninstalling
+  (`telemetryEnabled` already gates everything in `src/telemetry.js`).
 - **UI localization** — translate the extension's own labels/buttons via
   `chrome.i18n` + `_locales` (voice dictation already works in ~100 languages).
 - **Offline / on-device dictation** — Chrome's on-device speech recognition (or
@@ -254,7 +336,7 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 - **Doc-panel body sync** — push the panel's free-form markdown body into the
   bucket's Google Doc (today only captured entries sync; manual panel writing
   stays local).
-- **Two-way sync** — reflect edits made in the Sheet/Doc back into Dumpster
+- **Two-way sync** — reflect edits made in the Sheet/Doc back into IvyNotes
   (currently one-way push).
 
 ## Third-party

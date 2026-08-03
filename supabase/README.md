@@ -1,6 +1,6 @@
-# Dumpster telemetry backend (Supabase)
+# IvyNotes telemetry backend (Supabase)
 
-Anonymous, opt-out usage telemetry for the extension. You deploy this once to
+Anonymous usage telemetry for the extension. You deploy this once to
 your own Supabase project (`znerazqhztkqperaqgaw`); the extension then posts
 tiny event batches to the `ingest` Edge Function.
 

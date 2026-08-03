@@ -1,4 +1,4 @@
-# Publishing Dumpster to the Chrome Web Store
+# Publishing IvyNotes to the Chrome Web Store
 
 The end-to-end path from this repo to a public listing. Most steps are one-time;
 after that, releasing an update is just "build zip → upload → re-review".
@@ -24,7 +24,7 @@ after that, releasing an update is just "build zip → upload → re-review".
    ./scripts/package.sh
    ```
 
-   This produces `dist/dumpster-v<version>.zip` containing only what the store
+   This produces `dist/ivynotes-v<version>.zip` containing only what the store
    needs (manifest at the zip root, `src/`, popup/viewer files, `icons/`,
    `vendor/`, `LICENSE`). It also strips any local `"key"` field from the
    packaged manifest and warns if the OAuth `client_id` is still the placeholder.
@@ -49,7 +49,7 @@ after that, releasing an update is just "build zip → upload → re-review".
 
 1. Cloud Console → **OAuth consent screen** → publish from *Testing* to
    **In production**.
-2. Dumpster only uses the **non-sensitive** `drive.file` scope, so no security
+2. IvyNotes only uses the **non-sensitive** `drive.file` scope, so no security
    assessment is required. Until you complete (free) brand verification, users
    see an "unverified app" style consent screen — it works, it just looks plain.
 3. Make sure the **Google Sheets API** is enabled in the project.
@@ -62,8 +62,12 @@ Fill in on the dashboard:
   organized buckets"), category (Productivity), at least one **1280×800**
   screenshot, the 128px icon (already in `icons/`).
 - **Privacy practices** tab — this is what actually gates approval:
-  - **Privacy policy URL** — deploy `docs/PRIVACY.md` (GitHub Pages works) and
-    link it. Required because the extension uses `identity`/user data.
+  - **Privacy policy URL** — use
+    `https://rk-2903.github.io/ivynotes/PRIVACY.html` (GitHub Pages serves
+    `docs/` from `main`; edit `docs/PRIVACY.md` and it redeploys on push).
+    Required because the extension uses `identity`/user data. **If the repo is
+    ever renamed, this URL changes** — update the store listing at the same
+    time, or the policy link 404s.
   - **Single purpose**: "Save links, text, and notes into organized buckets for
     later action."
   - **Permission justifications** (copy-paste ready):
@@ -78,7 +82,7 @@ Fill in on the dashboard:
     | `sidePanel` | The doc panel (markdown editor + captures pinned beside a page). |
     | `optional_host_permissions` (`<all_urls>`) | Never requested at install. Requested once, in context, when the user first clicks the doc panel's region/OCR capture button — `tabs.captureVisibleTab` requires the broad grant (per-origin host permissions are rejected by the API). Used solely to draw the selection overlay and capture the visible tab on the user's explicit click; revocable in the extension's Site access settings. |
     | Host permissions (googleapis.com) | Optional cloud sync writes to the user's own Google Sheet/Docs. |
-    | Host permissions (supabase.co) | Send anonymous, opt-out usage statistics (event counts only) to the developer's backend. |
+    | Host permissions (supabase.co) | Send anonymous usage statistics (event counts only) to the developer's backend. |
   - **Data collection disclosure** (Chrome's "Data safety" form): declare that
     the extension collects, in anonymous form:
     - **App activity / interactions** — feature-usage and lifecycle event counts.
@@ -87,7 +91,8 @@ Fill in on the dashboard:
     For each, check: **not** sold to third parties, **not** used for purposes
     unrelated to the item's core functionality, and **not** used for
     creditworthiness/lending. The data is **not linked to a user identity** (a
-    random id only). Users can disable it in-product (opt-out). All other data
+    random id only) — there is no in-product opt-out yet, so do **not** claim one
+    on the form or in the listing. All other data
     (dumps, selections, screenshots, page URLs, Google user data) **stays
     on-device or in the user's own Google Drive** and is never sent to the
     developer.

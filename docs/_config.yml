@@ -1,0 +1,10 @@
+# GitHub Pages config — publishes docs/ as a small site so the privacy policy
+# has a public URL (the Chrome Web Store listing requires one).
+# Source: repo Settings → Pages → branch `main`, folder `/docs`.
+title: IvyNotes
+description: Keep what you're learning — capture from any page, dictate, and study with AI, right in your sidebar.
+theme: jekyll-theme-minimal
+# Working notes, not public pages.
+exclude:
+  - IDEAS-LUNANOTES-GAPS.md
+  - PUBLISHING.md

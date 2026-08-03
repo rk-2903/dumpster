@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="popup.css" />
-    <title>Dumpster — Doc panel</title>
+    <title>IvyNotes — Doc panel</title>
     <style>
       body {
         width: auto;
@@ -672,6 +672,256 @@
         font-size: 12.5px;
       }
 
+      /* ---- AI tools (BYO Gemini / Ollama) ---- */
+      .ai-btn {
+        font-size: 12px;
+      }
+      .ai-btn.busy {
+        animation: aibusy 1s ease-in-out infinite;
+        color: var(--accent);
+      }
+      @keyframes aibusy {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
+      }
+      .ai-menu-setup {
+        border-top: 1px solid var(--border);
+        color: var(--faint) !important;
+      }
+      .ai-modal, .quiz-modal, .ask-modal {
+        max-width: 340px;
+      }
+      /* settings must win if it is ever opened over the quiz/ask overlays */
+      #ai-backdrop {
+        z-index: 26;
+      }
+      .ai-provider-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .ai-prov {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 9px 8px;
+        cursor: pointer;
+      }
+      .ai-prov span {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--faint);
+      }
+      .ai-prov.sel {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+      }
+      .ai-label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .ai-label input {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 7px 9px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 12.5px;
+      }
+      .ai-label input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: var(--ring);
+      }
+      .ai-hint {
+        margin: 8px 0 0;
+        font-size: 11px;
+        line-height: 1.5;
+        color: var(--faint);
+      }
+      .ai-hint a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .ai-hint code {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 0 4px;
+        font-size: 10px;
+      }
+      .ai-status {
+        margin: 6px 0 0;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--danger, #ef4444);
+      }
+      .ai-status.ok {
+        color: var(--accent);
+      }
+      .ai-status[hidden] {
+        display: none !important;
+      }
+      .ai-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ai-head h3 {
+        margin: 0;
+        font-size: 14px;
+        flex: 1;
+      }
+      .ai-head-note {
+        font-size: 11px;
+        color: var(--faint);
+        font-weight: 600;
+      }
+      .ai-head .ghost-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 12px;
+      }
+      /* quiz */
+      .quiz-q {
+        font-size: 13.5px;
+        font-weight: 600;
+        line-height: 1.5;
+      }
+      .quiz-opts {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .quiz-opt {
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 12.5px;
+        text-align: left;
+        padding: 9px 11px;
+        cursor: pointer;
+      }
+      .quiz-opt:hover {
+        border-color: var(--accent);
+      }
+      .quiz-opt.correct {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+      }
+      .quiz-opt.wrong {
+        border-color: #ef4444;
+        background: color-mix(in srgb, #ef4444 12%, var(--surface));
+      }
+      .quiz-opt:disabled {
+        cursor: default;
+      }
+      .quiz-why {
+        margin: 2px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+        background: var(--surface2);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      .quiz-why[hidden] {
+        display: none !important;
+      }
+      /* ask */
+      .ask-modal {
+        height: 78vh;
+        max-height: 78vh;
+      }
+      .ask-msgs {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        scrollbar-width: thin;
+      }
+      .ask-msgs:empty::before {
+        content: "Answers cite the buckets they came from.";
+        color: var(--faint);
+        font-size: 11.5px;
+      }
+      .ask-q {
+        align-self: flex-end;
+        max-width: 90%;
+        background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+        border-radius: 10px 10px 2px 10px;
+        padding: 7px 10px;
+        font-size: 12.5px;
+      }
+      .ask-a {
+        align-self: flex-start;
+        max-width: 95%;
+        background: var(--surface2);
+        border-radius: 10px 10px 10px 2px;
+        padding: 8px 11px;
+        font-size: 12.5px;
+        line-height: 1.55;
+      }
+      .ask-a p { margin: 4px 0; }
+      .ask-a ul, .ask-a ol { margin: 4px 0; padding-left: 18px; }
+      .ask-a.thinking { color: var(--faint); font-style: italic; }
+      .ask-insert {
+        display: block;
+        margin-top: 6px;
+        border: none;
+        background: none;
+        color: var(--accent);
+        font: inherit;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        padding: 0;
+      }
+      .ask-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+      }
+      .ask-input-row textarea {
+        flex: 1;
+        min-width: 0;
+        resize: none;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 12.5px;
+      }
+      .ask-input-row textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: var(--ring);
+      }
+      .ask-input-row .primary-btn {
+        flex: none;
+        padding: 8px 14px;
+      }
+
       /* ---- Drag-and-drop image target ---- */
       .drop-overlay {
         position: fixed;
@@ -727,7 +977,7 @@
         <button id="cloud-open" class="ghost-btn cloud-chip" title="Cloud sync">
           <span id="cloud-dot" class="cloud-dot"></span>
         </button>
-        <button id="open-viewer" class="ghost-btn" title="Open full dumpster">↗</button>
+        <button id="open-viewer" class="ghost-btn" title="Open the full workspace">↗</button>
       </div>
       <div class="fmt-row" id="fmt-row">
         <select id="fmt-block" class="fmt-select" title="Paragraph style">
@@ -755,6 +1005,16 @@
             <button data-tsec="30">Last 30 seconds</button>
             <button data-tsec="60">Last 60 seconds</button>
             <button data-tsec="0">Full transcript</button>
+          </div>
+        </div>
+        <div class="cap-ts-wrap">
+          <button id="ai-btn" class="fmt-btn ai-btn" title="AI tools — summarize, flashcards, quiz, ask. Uses your own Gemini key or local Ollama.">✨</button>
+          <div id="ai-menu" class="export-menu cap-ts-menu" hidden>
+            <button id="ai-summarize">Summarize doc</button>
+            <button id="ai-flashcards">Flashcards → tracker</button>
+            <button id="ai-quiz">Quiz me</button>
+            <button id="ai-ask">Ask your notes</button>
+            <button id="ai-setup" class="ai-menu-setup">AI settings…</button>
           </div>
         </div>
         <div class="mode-tabs" role="tablist">
@@ -826,6 +1086,126 @@
         <div id="sheet-export-menu" class="export-menu" hidden>
           <button id="export-xlsx">Excel (.xlsx)</button>
           <button id="export-json">JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI settings — bring your own provider -->
+    <div id="ai-backdrop" class="pick-backdrop" hidden>
+      <div class="pick-modal ai-modal" role="dialog" aria-modal="true" aria-labelledby="ai-title">
+        <h3 id="ai-title">Connect Your Own AI</h3>
+        <div class="ai-provider-row">
+          <button class="ai-prov" data-prov="gemini">Gemini</button>
+          <button class="ai-prov" data-prov="ollama">Ollama<span>local &amp; private</span></button>
+          <button class="ai-prov" data-prov="openai">OpenAI</button>
+          <button class="ai-prov" data-prov="anthropic">Anthropic</button>
+        </div>
+        <div id="ai-gemini-fields" hidden>
+          <label class="ai-label">API key
+            <input id="ai-gemini-key" type="password" placeholder="AIza…" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="ai-label">Model
+            <input id="ai-gemini-model" list="ai-gemini-models" spellcheck="false" />
+          </label>
+          <datalist id="ai-gemini-models">
+            <option value="gemini-2.5-flash"></option>
+            <option value="gemini-2.5-flash-lite"></option>
+            <option value="gemini-2.5-pro"></option>
+          </datalist>
+          <p class="ai-hint">
+            Key from 
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
+            Your key stays on this device; doc text goes to Google only when you run an AI action.
+          </p>
+        </div>
+        <div id="ai-ollama-fields" hidden>
+          <label class="ai-label">Server URL
+            <input id="ai-ollama-url" type="text" placeholder="http://localhost:11434" spellcheck="false" />
+          </label>
+          <label class="ai-label">Model
+            <input id="ai-ollama-model" list="ai-ollama-models" placeholder="Test to list your models" spellcheck="false" />
+          </label>
+          <datalist id="ai-ollama-models"></datalist>
+          <p class="ai-hint">
+            Run a model on <b>your own machine</b> — install from
+            <a href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>, then allow this extension
+            with <code>OLLAMA_ORIGINS=chrome-extension://*</code>. Nothing leaves your computer.
+            <br /><b>macOS:</b> the menu-bar app often ignores <code>launchctl setenv</code>. The reliable way is to
+            quit Ollama, then run <code>OLLAMA_ORIGINS='chrome-extension://*' ollama serve</code> in Terminal —
+            a server that's already running won't pick the setting up until it restarts.
+          </p>
+        </div>
+        <div id="ai-openai-fields" hidden>
+          <label class="ai-label">API key
+            <input id="ai-openai-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="ai-label">Model
+            <input id="ai-openai-model" list="ai-openai-models" spellcheck="false" />
+          </label>
+          <datalist id="ai-openai-models">
+            <option value="gpt-4o-mini"></option>
+            <option value="gpt-4o"></option>
+            <option value="gpt-4.1-mini"></option>
+            <option value="gpt-4.1"></option>
+          </datalist>
+          <p class="ai-hint">
+            Key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>
+            (pay-as-you-go — you're billed by OpenAI for what you use). Your key stays on this device.
+          </p>
+        </div>
+        <div id="ai-anthropic-fields" hidden>
+          <label class="ai-label">API key
+            <input id="ai-anthropic-key" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="ai-label">Model
+            <input id="ai-anthropic-model" list="ai-anthropic-models" spellcheck="false" />
+          </label>
+          <datalist id="ai-anthropic-models">
+            <option value="claude-sonnet-5"></option>
+            <option value="claude-opus-5"></option>
+            <option value="claude-haiku-4-5-20251001"></option>
+          </datalist>
+          <p class="ai-hint">
+            Key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">console.anthropic.com</a>
+            (pay-as-you-go — you're billed by Anthropic for what you use). Your key stays on this device.
+          </p>
+        </div>
+        <p id="ai-status" class="ai-status" hidden></p>
+        <div class="pick-actions">
+          <button id="ai-test" class="secondary-btn">Test</button>
+          <button id="ai-save" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiz overlay -->
+    <div id="quiz-backdrop" class="pick-backdrop" hidden>
+      <div class="pick-modal quiz-modal" role="dialog" aria-modal="true">
+        <div class="ai-head">
+          <h3>Quiz me</h3>
+          <span id="quiz-progress" class="ai-head-note"></span>
+          <button id="quiz-close" class="ghost-btn" title="Close">✕</button>
+        </div>
+        <div id="quiz-q" class="quiz-q"></div>
+        <div id="quiz-opts" class="quiz-opts"></div>
+        <p id="quiz-why" class="quiz-why" hidden></p>
+        <div class="pick-actions">
+          <button id="quiz-next" class="primary-btn" hidden>Next</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ask your notes -->
+    <div id="ask-backdrop" class="pick-backdrop" hidden>
+      <div class="pick-modal ask-modal" role="dialog" aria-modal="true">
+        <div class="ai-head">
+          <h3>Ask your notes</h3>
+          <button id="ask-close" class="ghost-btn" title="Close">✕</button>
+        </div>
+        <div id="ask-msgs" class="ask-msgs"></div>
+        <div class="ask-input-row">
+          <textarea id="ask-input" rows="2" placeholder="Ask anything across your buckets…"></textarea>
+          <button id="ask-send" class="primary-btn">Ask</button>
         </div>
       </div>
     </div>

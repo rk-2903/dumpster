@@ -1,4 +1,4 @@
-// Dumpster telemetry — uninstall Edge Function.
+// IvyNotes telemetry — uninstall Edge Function.
 //
 // Target of chrome.runtime.setUninstallURL: Chrome opens this URL in a tab when
 // the user removes the extension. We log one anonymous `uninstall` row and show
@@ -14,7 +14,7 @@ const UUID_RE =
 
 const PAGE = `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dumpster — uninstalled</title>
+<title>IvyNotes — uninstalled</title>
 <style>
   body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
     font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -26,10 +26,10 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8">
 </style></head>
 <body><div class="card">
   <div class="mark"></div>
-  <h1>Dumpster is uninstalled</h1>
+  <h1>IvyNotes is uninstalled</h1>
   <p>Thanks for trying it. If something didn't work for you, we'd genuinely like
      to know — feedback goes a long way.</p>
-  <p><a href="https://github.com/rk-2903/dumpster/issues">Leave feedback ↗</a></p>
+  <p><a href="https://github.com/rk-2903/ivynotes/issues">Leave feedback ↗</a></p>
 </div></body></html>`;
 
 Deno.serve(async (req) => {

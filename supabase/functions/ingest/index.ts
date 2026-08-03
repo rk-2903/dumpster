@@ -1,4 +1,4 @@
-// Dumpster telemetry — ingest Edge Function.
+// IvyNotes telemetry — ingest Edge Function.
 //
 // Accepts a small anonymous batch from the extension and inserts it into
 // `public.events` using the service role (bypassing RLS). Every field is

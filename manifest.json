@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Dumpster",
-  "version": "0.6.1",
-  "description": "Quick-dump links, snippets, and notes into buckets. Local-first, append-forever.",
+  "name": "IvyNotes",
+  "version": "1.0.0",
+  "description": "Capture any page, dictate in any language, and study with AI — summaries, quizzes, flashcards — in your sidebar.",
   "permissions": [
     "contextMenus",
     "storage",
@@ -44,7 +44,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Open Dumpster doc panel",
+    "default_title": "Open IvyNotes doc panel",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -56,5 +56,5 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "options_page": "dumpster.html"
+  "options_page": "workspace.html"
 }

@@ -1,5 +1,5 @@
 // Google Docs sync provider. Mirrors each bucket into its own Google Doc
-// ("Dumpster — <bucket>"). Entries append chronologically under date headings.
+// ("IvyNotes — <bucket>"). Entries append chronologically under date headings.
 //
 // Heading hierarchy (so the Doc's outline pane is navigable):
 //   TITLE      → bucket name
@@ -82,7 +82,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const token = await getToken(false);
     const boundary = `dumpster-${crypto.randomUUID()}`;
     const metadata = JSON.stringify({
-      name: "Dumpster OCR temp",
+      name: "IvyNotes OCR temp",
       mimeType: "application/vnd.google-apps.document",
     });
     const body = new Blob(
@@ -137,7 +137,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
   async function ensureBucketDoc(bucketId, bucketName) {
     const map = await getMap();
     if (map[bucketId]) return map[bucketId];
-    const created = await api("POST", `${DOCS}/documents`, { title: `Dumpster — ${bucketName}` });
+    const created = await api("POST", `${DOCS}/documents`, { title: `IvyNotes — ${bucketName}` });
     // The bucket name is also the doc's visible heading (TITLE style), wrapped
     // in a named range so a bucket rename can rewrite it later.
     const t = `${bucketName}\n`;
@@ -436,7 +436,7 @@ export function createDocsProvider({ getToken, fetchImpl = globalThis.fetch, sto
     const map = await getMap();
     const tab = map[bucketId];
     if (!tab) return;
-    await api("PATCH", `${DRIVE}/files/${tab.docId}`, { name: `Dumpster — ${newName}` });
+    await api("PATCH", `${DRIVE}/files/${tab.docId}`, { name: `IvyNotes — ${newName}` });
     // Rewrite the in-doc title heading as well.
     const doc = await getDoc(tab.docId);
     const span = rangeOf(doc, TITLE_RANGE);

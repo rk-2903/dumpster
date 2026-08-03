@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a clean Chrome Web Store zip: dist/dumpster-v<version>.zip
+# Build a clean Chrome Web Store zip: dist/ivynotes-v<version>.zip
 #
 # - Packages only what the store needs (manifest at zip root, src/, popup/viewer
 #   files, icons/, vendor/, LICENSE) — no .git, docs, scripts, or dev files.
@@ -15,12 +15,12 @@ command -v zip >/dev/null || { echo "error: 'zip' not found"; exit 1; }
 command -v node >/dev/null || { echo "error: 'node' not found (used to edit manifest)"; exit 1; }
 
 VERSION="$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).version")"
-OUT="dist/dumpster-v${VERSION}.zip"
+OUT="dist/ivynotes-v${VERSION}.zip"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
 # --- stage the store payload -------------------------------------------------
-cp manifest.json popup.html popup.css popup.js dumpster.html dumpster.css dumpster.js LICENSE "$STAGE/"
+cp manifest.json popup.html popup.css popup.js workspace.html workspace.css workspace.js LICENSE "$STAGE/"
 cp -R src icons vendor "$STAGE/"
 
 # --- clean the staged manifest ----------------------------------------------
