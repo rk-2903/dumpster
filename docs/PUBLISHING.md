@@ -1,4 +1,4 @@
-# Publishing Dumpster to the Chrome Web Store
+# Publishing IvyNotes to the Chrome Web Store
 
 The end-to-end path from this repo to a public listing. Most steps are one-time;
 after that, releasing an update is just "build zip → upload → re-review".
@@ -24,7 +24,7 @@ after that, releasing an update is just "build zip → upload → re-review".
    ./scripts/package.sh
    ```
 
-   This produces `dist/dumpster-v<version>.zip` containing only what the store
+   This produces `dist/ivynotes-v<version>.zip` containing only what the store
    needs (manifest at the zip root, `src/`, popup/viewer files, `icons/`,
    `vendor/`, `LICENSE`). It also strips any local `"key"` field from the
    packaged manifest and warns if the OAuth `client_id` is still the placeholder.
@@ -49,7 +49,7 @@ after that, releasing an update is just "build zip → upload → re-review".
 
 1. Cloud Console → **OAuth consent screen** → publish from *Testing* to
    **In production**.
-2. Dumpster only uses the **non-sensitive** `drive.file` scope, so no security
+2. IvyNotes only uses the **non-sensitive** `drive.file` scope, so no security
    assessment is required. Until you complete (free) brand verification, users
    see an "unverified app" style consent screen — it works, it just looks plain.
 3. Make sure the **Google Sheets API** is enabled in the project.

@@ -12,11 +12,11 @@ async function ask() {
     for (const t of stream.getTracks()) t.stop();
     status.className = "status ok";
     status.innerHTML =
-      "<b>Microphone enabled.</b> Back in the Dumpster panel, click the mic button to start dictating. This tab will close itself.";
+      "<b>Microphone enabled.</b> Back in the IvyNotes panel, click the mic button to start dictating. This tab will close itself.";
     setTimeout(() => window.close(), 2200);
   } catch {
     status.innerHTML =
-      "Microphone access was <b>blocked</b>. Click the mic icon in the address bar (or Ask again), choose Allow, then return to the Dumpster panel.";
+      "Microphone access was <b>blocked</b>. Click the mic icon in the address bar (or Ask again), choose Allow, then return to the IvyNotes panel.";
     retry.hidden = false;
   }
 }

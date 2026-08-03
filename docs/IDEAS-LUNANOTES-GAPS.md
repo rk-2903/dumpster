@@ -14,7 +14,7 @@ real-time collaboration, AI chat over your library) with a freemium model
 
 ## Where we already stand
 
-Dumpster overlaps more than expected, with a different center of gravity:
+IvyNotes overlaps more than expected, with a different center of gravity:
 
 | Theirs | Ours today |
 |---|---|

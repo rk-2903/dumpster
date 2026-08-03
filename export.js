@@ -24,9 +24,9 @@ async function init() {
     return;
   }
 
-  document.title = `${bucket.name} — Dumpster export`;
+  document.title = `${bucket.name} — IvyNotes export`;
   els.title.textContent = bucket.name;
-  els.sub.textContent = `Exported from Dumpster · ${new Date().toLocaleDateString("en-US", {
+  els.sub.textContent = `Exported from IvyNotes · ${new Date().toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",

@@ -56,7 +56,7 @@ export function createSheetsProvider({ getToken, fetchImpl = globalThis.fetch, s
   async function ensureSpreadsheet() {
     let id = await store.get(SPREADSHEET_KEY);
     if (id) return id;
-    const created = await api("POST", BASE, { properties: { title: "Dumpster" } });
+    const created = await api("POST", BASE, { properties: { title: "IvyNotes" } });
     id = created.spreadsheetId;
     await store.set(SPREADSHEET_KEY, id);
     return id;

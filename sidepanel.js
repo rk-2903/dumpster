@@ -294,7 +294,7 @@ function setupCloudChip() {
     chrome.storage.local.get(["gconnection", "syncState"], (o) => apply(o.gconnection, o.syncState));
   });
   els.cloudOpen.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("dumpster.html#cloud") });
+    chrome.tabs.create({ url: chrome.runtime.getURL("workspace.html#cloud") });
   });
 }
 
@@ -839,7 +839,7 @@ async function onRegionCapture(kind) {
     await saveEntry({ content: "", blob: crop }); // image only, no caption
     showToast("Screenshot added");
   } catch (err) {
-    console.warn(`[dumpster] panel capture failed at "${stage}":`, err);
+    console.warn(`[ivynotes] panel capture failed at "${stage}":`, err);
     const detail = String(err?.message || err).slice(0, 110);
     showToast(
       access === "declined"
@@ -1243,7 +1243,7 @@ async function onAiSave() {
       await chrome.permissions.request({ origins: [origin] });
     }
   } catch (err) {
-    console.warn("[dumpster] AI host permission not granted:", err);
+    console.warn("[ivynotes] AI host permission not granted:", err);
   }
   els.aiBackdrop.hidden = true;
   const MODEL_OF = {
@@ -1557,10 +1557,10 @@ function download(filename, mime, data) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-const safeName = (s) => (s || "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "dumpster";
+const safeName = (s) => (s || "").replace(/[\\/:*?"<>|]+/g, "-").trim() || "ivynotes";
 
 async function bucketName(id) {
-  return (await getBuckets()).find((b) => b.id === id)?.name || "Dumpster";
+  return (await getBuckets()).find((b) => b.id === id)?.name || "IvyNotes";
 }
 
 async function onExportPdf() {
@@ -1739,7 +1739,7 @@ async function onExportGo() {
   const buckets = (await getBuckets()).filter((b) => ids.includes(b.id));
   const data = [];
   for (const b of buckets) data.push({ name: b.name, rows: await exportRows(b.id) });
-  const stem = data.length === 1 ? safeName(data[0].name) : "dumpster-trackers";
+  const stem = data.length === 1 ? safeName(data[0].name) : "ivynotes-trackers";
 
   if (pickFormat === "json") {
     const obj = {};

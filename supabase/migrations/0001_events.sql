@@ -1,4 +1,4 @@
--- Dumpster anonymous telemetry — events table + read views.
+-- IvyNotes anonymous telemetry — events table + read views.
 --
 -- Rows are written ONLY by the `ingest` Edge Function, which runs with the
 -- service role and validates every payload. Row-Level Security is enabled with
