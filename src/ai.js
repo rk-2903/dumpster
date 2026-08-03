@@ -100,12 +100,26 @@ export async function testAi(s) {
     if (s.provider === "ollama") {
       const check = checkOllamaUrl(s.ollamaUrl);
       if (!check.ok) return check;
-      const res = await deps.fetchImpl(`${trimSlash(s.ollamaUrl)}/api/tags`);
+      const base = trimSlash(s.ollamaUrl);
+      const res = await deps.fetchImpl(`${base}/api/tags`);
       if (res.status === 403) return { ok: false, error: OLLAMA_UNREACHABLE };
       if (!res.ok) return { ok: false, error: `Ollama answered ${res.status} — check the URL` };
       const data = await res.json();
       const models = (data.models || []).map((m) => m.name);
       if (!models.length) return { ok: false, error: "Ollama is running but has no models — try `ollama pull llama3.2`" };
+      // A plain GET can sail past Ollama's origin check (Chrome omits Origin on
+      // simple requests), so /api/tags alone would report "Connected" while
+      // every real action still 403s. Probe the same shape the actions use — a
+      // JSON POST, which does carry Origin — before claiming success.
+      const probe = await deps.fetchImpl(`${base}/api/show`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: s.ollamaModel || models[0] }),
+      });
+      if (probe.status === 403) return { ok: false, error: OLLAMA_UNREACHABLE, models };
+      if (!probe.ok && probe.status !== 404) {
+        return { ok: false, error: `Ollama answered ${probe.status} — check the server`, models };
+      }
       return { ok: true, models };
     }
     if (s.provider === "openai") {
@@ -143,7 +157,8 @@ const anthropicHeaders = (key) => ({
 });
 
 const OLLAMA_UNREACHABLE =
-  "Can't reach Ollama — is `ollama serve` running? If it is, restart it with OLLAMA_ORIGINS=chrome-extension://* so the extension may connect";
+  "Ollama is blocking this extension. Quit it, then run: OLLAMA_ORIGINS='chrome-extension://*' ollama serve — " +
+  "a server that's already running won't pick the setting up until it restarts.";
 
 // Shared mapping for the two bearer/key API providers.
 async function keyApiError(res, label, keyUrl) {
