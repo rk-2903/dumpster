@@ -78,7 +78,7 @@ Fill in on the dashboard:
     | `sidePanel` | The doc panel (markdown editor + captures pinned beside a page). |
     | `optional_host_permissions` (`<all_urls>`) | Never requested at install. Requested once, in context, when the user first clicks the doc panel's region/OCR capture button — `tabs.captureVisibleTab` requires the broad grant (per-origin host permissions are rejected by the API). Used solely to draw the selection overlay and capture the visible tab on the user's explicit click; revocable in the extension's Site access settings. |
     | Host permissions (googleapis.com) | Optional cloud sync writes to the user's own Google Sheet/Docs. |
-    | Host permissions (supabase.co) | Send anonymous, opt-out usage statistics (event counts only) to the developer's backend. |
+    | Host permissions (supabase.co) | Send anonymous usage statistics (event counts only) to the developer's backend. |
   - **Data collection disclosure** (Chrome's "Data safety" form): declare that
     the extension collects, in anonymous form:
     - **App activity / interactions** — feature-usage and lifecycle event counts.
@@ -87,7 +87,8 @@ Fill in on the dashboard:
     For each, check: **not** sold to third parties, **not** used for purposes
     unrelated to the item's core functionality, and **not** used for
     creditworthiness/lending. The data is **not linked to a user identity** (a
-    random id only). Users can disable it in-product (opt-out). All other data
+    random id only) — there is no in-product opt-out yet, so do **not** claim one
+    on the form or in the listing. All other data
     (dumps, selections, screenshots, page URLs, Google user data) **stays
     on-device or in the user's own Google Drive** and is never sent to the
     developer.

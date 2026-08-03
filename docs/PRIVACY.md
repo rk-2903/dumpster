@@ -1,6 +1,6 @@
 # IvyNotes — Privacy Policy
 
-_Last updated: [SET DATE BEFORE DEPLOYING]_
+_Last updated: 3 August 2026_
 
 IvyNotes is a Chrome extension for saving links, text snippets, and notes into
 organized buckets. It is built to be **local-first**: your data belongs to you
@@ -47,16 +47,19 @@ and stays on your device unless *you* connect your own Google account.
   happens except when you click an AI action.
 
 IvyNotes has no user accounts, no advertising, and no cross-site tracking, and
-it never reads your browsing history. It does collect **anonymous, opt-out usage
+it never reads your browsing history. It does send **anonymous usage
 statistics** to help decide what to improve — described in its own section
 below.
 
-## Anonymous usage statistics (opt-out)
+## Anonymous usage statistics
 
 To understand how many people use IvyNotes and which features matter, the
-extension sends a small amount of **anonymous** usage data. This is **on by
-default** and you can turn it off anytime (in the popup, or in the Cloud sync
-dialog: *"Share anonymous usage stats"*).
+extension sends a small amount of **anonymous** usage data. It is **enabled**,
+and there is currently **no setting in the extension to turn it off** —
+uninstalling IvyNotes stops it completely (see *How to stop it* below). The data
+is anonymous by construction: it is tied to a random identifier created on your
+device and can never be connected to you, your Google account, or anything you
+save.
 
 - **What is collected:** a random identifier generated on your device (a UUID —
   not derived from you, your account, or your hardware), the name of an event
@@ -70,11 +73,12 @@ dialog: *"Share anonymous usage stats"*).
 - **Where it goes:** to the developer's own Supabase project, used solely to
   produce aggregate counts (active users, feature usage, retention, error
   rates). It is not sold, shared, or used for advertising or profiling.
-- **Uninstall:** if telemetry is on, removing the extension opens a page that
-  records a single anonymous `uninstall` event (the random id only). Turning
-  telemetry off first prevents even that.
-- **Turning it off:** disables all of the above immediately and clears anything
-  still queued on your device.
+- **Uninstall:** removing the extension opens a page that records a single
+  anonymous `uninstall` event (the random identifier only).
+- **How to stop it:** uninstalling IvyNotes ends all of it — the random
+  identifier and anything still queued are stored on your device and are removed
+  with the extension. A visible on/off setting is planned for a future release;
+  until then, uninstalling is the way to stop collection.
 
 ## Where your data lives
 
@@ -125,7 +129,7 @@ transferred to third parties, and is not used for advertising.
 | Optional site access (on request) | Nothing at install. The first time you use the doc panel's region/OCR capture buttons, Chrome shows its own one-time prompt asking to allow access on websites — required because Chrome's screen-capture API only accepts that broad grant. IvyNotes uses it solely to draw the selection overlay and capture the visible tab when *you* click a capture button; it still never reads pages in the background. Revocable anytime at `chrome://extensions` → IvyNotes → Site access. |
 | Side panel | The optional study panel you can pin beside a page. |
 | googleapis.com access | Only if you connect Google: write to your own Sheet. |
-| supabase.co access | Send the anonymous usage statistics described above (opt-out). |
+| supabase.co access | Send the anonymous usage statistics described above. |
 
 ## Deleting your data
 
@@ -144,4 +148,4 @@ URL with a new "last updated" date.
 
 ## Contact
 
-Questions about this policy: **[ADD CONTACT EMAIL BEFORE DEPLOYING]**
+Questions about this policy: **rahulkumar6611@gmail.com**
