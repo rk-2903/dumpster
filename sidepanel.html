@@ -1130,9 +1130,9 @@
             Run a model on <b>your own machine</b> — install from
             <a href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>, then allow this extension
             with <code>OLLAMA_ORIGINS=chrome-extension://*</code>. Nothing leaves your computer.
-            <br /><b>macOS menu-bar app:</b> run
-            <code>launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"</code> then <b>quit and reopen Ollama</b> —
-            a running server won't pick it up until it restarts.
+            <br /><b>macOS:</b> the menu-bar app often ignores <code>launchctl setenv</code>. The reliable way is to
+            quit Ollama, then run <code>OLLAMA_ORIGINS='chrome-extension://*' ollama serve</code> in Terminal —
+            a server that's already running won't pick the setting up until it restarts.
           </p>
         </div>
         <div id="ai-openai-fields" hidden>
