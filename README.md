@@ -1,8 +1,12 @@
-# Dumpster
+# IvyNotes
 
-A Chrome extension for quick-dumping links, snippets, and notes into **buckets**.
-Local-first, append-forever. Built to stop losing the job link / profile / snippet
-you meant to come back to.
+**Keep what you're learning: capture from any page, dictate in multiple
+languages, and study with AI — summarize, quiz, and flashcards — right in your
+sidebar.**
+
+A Chrome extension that turns the browser sidebar into a notebook. Everything is
+**local-first** and append-forever, with optional sync to **your own** Google
+Docs and Sheets — no account, no server of ours in the middle.
 
 ## What it does
 
@@ -121,7 +125,7 @@ you meant to come back to.
   text is editable later (double-click), links are clickable, and each bucket
   has a live **filter**.
 - **Live refresh** — dumps made from the popup or right-click appear instantly
-  in an open Dumpster tab.
+  in an open IvyNotes tab.
 - **Export** — pick any buckets (the one you're viewing is pre-selected, or
   choose All) and export to **Excel** (one sheet per bucket) or **JSON** (each
   bucket a key holding its dumps).
@@ -136,7 +140,7 @@ Data lives in the browser (IndexedDB + `chrome.storage.local`, with persistent
 storage requested so it isn't evicted). Your **content** never leaves your
 machine unless you connect Google — and then it goes only to your own Drive.
 
-- **Anonymous usage stats (opt-out)** — to see how many people use Dumpster and
+- **Anonymous usage stats (opt-out)** — to see how many people use IvyNotes and
   which features matter, it sends **anonymous** event counts (a random id,
   event names like `install`/`active`/`feature`/`error`, version, locale) to the
   developer's Supabase backend. Never your dumps, selections, screenshots, page
@@ -148,8 +152,8 @@ machine unless you connect Google — and then it goes only to your own Drive.
 
 1. Open `chrome://extensions`.
 2. Toggle **Developer mode** (top-right).
-3. Click **Load unpacked** and select this `dumpster/` folder.
-4. Pin the Dumpster icon from the toolbar puzzle menu.
+3. Click **Load unpacked** and select this project folder.
+4. Pin the IvyNotes icon from the toolbar puzzle menu.
 
 Reload the extension from that page after any code change.
 
@@ -179,7 +183,7 @@ Reload the extension from that page after any code change.
 | `export.html/.js` | Print-styled page behind the doc panel's PDF export |
 | `micgrant.html/.js` | One-time microphone grant page (side panels can't show the prompt) |
 | `popup.html/.css/.js` | Quick dump popup (icon right-click → small window) |
-| `dumpster.html/.css/.js` | Full-page workspace: tabs, list/board, filter, import/export, Cloud modal |
+| `workspace.html/.css/.js` | Full-page workspace: tabs, list/board, filter, import/export, Cloud modal |
 | `newbucket.html/.js` | Fallback naming window for the context-menu New bucket flow |
 | `scripts/package.sh` | Builds the Chrome Web Store zip (`dist/`) |
 | `docs/` | Publishing guide + privacy policy draft |
@@ -193,7 +197,7 @@ The ✨ menu (Summarize · Flashcards · Quiz · Ask your notes) is **off until 
 connect a provider**. Open ✨ → **AI settings…**, pick one, then **Test** →
 **Save**. Your key is stored only in `chrome.storage.local` on this device, and
 requests go straight from the extension to the provider you chose — there is no
-Dumpster server in the path.
+IvyNotes server in the path.
 
 | Provider | Cost | Get a key |
 |---|---|---|
@@ -238,7 +242,7 @@ true.
 Cloud sync mirrors your dumps into your **own** Google Drive. Both destinations
 are live at once, routed by each bucket's type:
 
-- **Sheet buckets** — tabs in one "Dumpster" spreadsheet (the default empty
+- **Sheet buckets** — tabs in one "IvyNotes" spreadsheet (the default empty
   "Sheet1" is cleaned up automatically), a row per dump keyed by entry id, so
   status changes, edits, and deletes update the same row.
 - **Doc buckets** — each bucket gets its own Google Doc (bucket name as the
@@ -252,7 +256,7 @@ are live at once, routed by each bucket's type:
   the document, then deleted (the local copy remains the source of truth).
 
 Connecting (an official-style **Connect Google** button in the Cloud modal)
-backfills everything already in Dumpster, oldest-first. The Cloud chip shows
+backfills everything already in IvyNotes, oldest-first. The Cloud chip shows
 live sync state (with error detail when something fails), and the modal links to
 the spreadsheet plus a collapsible list of each Doc bucket's doc. Local
 IndexedDB stays the source of truth; syncing is a background, non-blocking push
@@ -279,14 +283,14 @@ lighter brand verification, not the restricted-scope security assessment.
 
 ## Publishing
 
-Everything needed to ship Dumpster to the Chrome Web Store:
+Everything needed to ship IvyNotes to the Chrome Web Store:
 
 - **[docs/PUBLISHING.md](docs/PUBLISHING.md)** — the full step-by-step: developer
   account, packaging, the extension-ID / OAuth-client reconciliation (the one
   gotcha), consent-screen production, store listing + permission justifications,
   and how to release updates.
 - **`./scripts/package.sh`** — builds a clean store upload at
-  `dist/dumpster-v<version>.zip` (strips the dev-only manifest `"key"`, warns if
+  `dist/ivynotes-v<version>.zip` (strips the dev-only manifest `"key"`, warns if
   the OAuth client id is still the placeholder).
 - **[docs/PRIVACY.md](docs/PRIVACY.md)** — privacy policy draft. Deploy it to a
   public URL (e.g. GitHub Pages) and fill in the date + contact email before
@@ -326,7 +330,7 @@ Everything needed to ship Dumpster to the Chrome Web Store:
 - **Doc-panel body sync** — push the panel's free-form markdown body into the
   bucket's Google Doc (today only captured entries sync; manual panel writing
   stays local).
-- **Two-way sync** — reflect edits made in the Sheet/Doc back into Dumpster
+- **Two-way sync** — reflect edits made in the Sheet/Doc back into IvyNotes
   (currently one-way push).
 
 ## Third-party

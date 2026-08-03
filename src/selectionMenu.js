@@ -39,7 +39,7 @@
     }
     /* once dragged, an explicit top wins over the centered default */
     .launcher.pos { top: 0; transform: none; }
-    /* round drag handle with the Dumpster mark, always visible at the edge */
+    /* round drag handle with the IvyNotes mark, always visible at the edge */
     .launcher .l-icon {
       width: 34px;
       height: 34px;
@@ -292,7 +292,7 @@
     chrome.runtime.sendMessage(
       { type: "dumpster-selection-save", format: btn.dataset.format, text: currentText },
       (res) => {
-        if (chrome.runtime.lastError) return showNote("Dumpster reloaded — try again");
+        if (chrome.runtime.lastError) return showNote("IvyNotes reloaded — try again");
         showNote(res?.ok ? `Saved to ${res.bucketName}` : res?.error || "Failed");
       }
     );
@@ -425,7 +425,7 @@
     const close = document.createElement("button");
     close.className = "l-close";
     close.textContent = "×";
-    close.title = "Hide the Dumpster dock";
+    close.title = "Hide the IvyNotes dock";
 
     const hideMenu = document.createElement("div");
     hideMenu.className = "l-hide-menu";
@@ -491,7 +491,7 @@
 
     const icon = document.createElement("span");
     icon.className = "l-icon";
-    icon.title = "Dumpster — drag to move · hover for options";
+    icon.title = "IvyNotes — drag to move · hover for options";
     const logo = document.createElement("span");
     logo.className = "l-logo";
     icon.appendChild(logo);

@@ -193,7 +193,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     try {
       await captureScreenshot(tab, mode === "reg" ? "region" : "visible", bucketId);
     } catch (err) {
-      console.warn("[dumpster] screenshot failed:", err.message);
+      console.warn("[ivynotes] screenshot failed:", err.message);
       flashBadgeError();
     }
     return;
@@ -214,7 +214,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     } catch (err) {
       // Page doesn't allow injection (chrome://, Web Store) → capture can't
       // work there either; signal failure instead of opening a naming window.
-      console.warn("[dumpster] screenshot new-bucket failed:", err.message);
+      console.warn("[ivynotes] screenshot new-bucket failed:", err.message);
       flashBadgeError();
     }
     return;
@@ -329,7 +329,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // panel uses to arm the page helper on the current tab.
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((e) => console.warn("[dumpster] panel behavior:", e.message));
+  .catch((e) => console.warn("[ivynotes] panel behavior:", e.message));
 
 // MV3 workers are torn down and restarted; rebuild on wake so the menu survives.
 chrome.runtime.onStartup.addListener(() => {
@@ -366,7 +366,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     await saveScreenshot(target.id, tab, null);
     track("feature", { name: "screenshot-hotkey" });
   } catch (err) {
-    console.warn("[dumpster] shortcut screenshot failed:", err.message);
+    console.warn("[ivynotes] shortcut screenshot failed:", err.message);
     flashBadgeError("screenshot");
   }
 });
