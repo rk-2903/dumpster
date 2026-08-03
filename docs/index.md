@@ -14,4 +14,4 @@ local-first, with optional sync to **your own** Google Docs and Sheets — no
 account, no server of ours in the middle.
 
 - [Privacy Policy](PRIVACY.html)
-- [Source code on GitHub](https://github.com/rk-2903/dumpster)
+- [Source code on GitHub](https://github.com/rk-2903/ivynotes)
