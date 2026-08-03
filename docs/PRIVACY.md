@@ -3,7 +3,7 @@ layout: default
 title: Privacy Policy
 ---
 
-# IvyNotes — Privacy Policy
+# IvyNotes Privacy Policy
 
 _Last updated: 3 August 2026_
 
