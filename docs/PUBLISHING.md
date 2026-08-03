@@ -63,7 +63,7 @@ Fill in on the dashboard:
   screenshot, the 128px icon (already in `icons/`).
 - **Privacy practices** tab — this is what actually gates approval:
   - **Privacy policy URL** — use
-    `https://rk-2903.github.io/dumpster/PRIVACY.html` (GitHub Pages serves
+    `https://rk-2903.github.io/ivynotes/PRIVACY.html` (GitHub Pages serves
     `docs/` from `main`; edit `docs/PRIVACY.md` and it redeploys on push).
     Required because the extension uses `identity`/user data. **If the repo is
     ever renamed, this URL changes** — update the store listing at the same

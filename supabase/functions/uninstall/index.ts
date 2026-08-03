@@ -29,7 +29,7 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8">
   <h1>IvyNotes is uninstalled</h1>
   <p>Thanks for trying it. If something didn't work for you, we'd genuinely like
      to know — feedback goes a long way.</p>
-  <p><a href="https://github.com/rk-2903/dumpster/issues">Leave feedback ↗</a></p>
+  <p><a href="https://github.com/rk-2903/ivynotes/issues">Leave feedback ↗</a></p>
 </div></body></html>`;
 
 Deno.serve(async (req) => {
