@@ -293,9 +293,11 @@ Everything needed to ship IvyNotes to the Chrome Web Store:
 - **`./scripts/package.sh`** — builds a clean store upload at
   `dist/ivynotes-v<version>.zip` (strips the dev-only manifest `"key"`, warns if
   the OAuth client id is still the placeholder).
-- **[docs/PRIVACY.md](docs/PRIVACY.md)** — privacy policy draft. Deploy it to a
-  public URL (e.g. GitHub Pages) and fill in the date + contact email before
-  submitting the listing — the store requires the URL.
+- **Privacy policy** — published at
+  **<https://rk-2903.github.io/dumpster/PRIVACY.html>** (GitHub Pages, served
+  from [`docs/`](docs/) on `main`); this is the URL the store listing links to.
+  The source lives in [docs/PRIVACY.md](docs/PRIVACY.md) — edit it there and the
+  page redeploys on the next push to `main`.
 
 ## Roadmap (Phase 2)
 

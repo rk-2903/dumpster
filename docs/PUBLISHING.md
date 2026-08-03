@@ -62,8 +62,12 @@ Fill in on the dashboard:
   organized buckets"), category (Productivity), at least one **1280×800**
   screenshot, the 128px icon (already in `icons/`).
 - **Privacy practices** tab — this is what actually gates approval:
-  - **Privacy policy URL** — deploy `docs/PRIVACY.md` (GitHub Pages works) and
-    link it. Required because the extension uses `identity`/user data.
+  - **Privacy policy URL** — use
+    `https://rk-2903.github.io/dumpster/PRIVACY.html` (GitHub Pages serves
+    `docs/` from `main`; edit `docs/PRIVACY.md` and it redeploys on push).
+    Required because the extension uses `identity`/user data. **If the repo is
+    ever renamed, this URL changes** — update the store listing at the same
+    time, or the policy link 404s.
   - **Single purpose**: "Save links, text, and notes into organized buckets for
     later action."
   - **Permission justifications** (copy-paste ready):
